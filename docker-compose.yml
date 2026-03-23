@@ -1,0 +1,52 @@
+services:
+  asset-db:
+    image: postgres:16-alpine
+    container_name: asset-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  asset-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: asset-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@asset-db:5432/${POSTGRES_DB}
+    ports:
+      - "${BACKEND_PORT}:8000"
+    volumes:
+      - ./backend/data:/app/data
+    depends_on:
+      asset-db:
+        condition: service_healthy
+
+  asset-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://${HOST_IP}:${BACKEND_PORT}
+    container_name: asset-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - asset-backend
+
+volumes:
+  postgres_data:
