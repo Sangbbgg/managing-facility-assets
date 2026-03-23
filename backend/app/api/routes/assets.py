@@ -67,6 +67,13 @@ async def bulk_register(
     return result
 
 
+@router.get("/enriched")
+async def get_enriched_assets(db: AsyncSession = Depends(get_db)):
+    """자산 목록 + 모든 조인 데이터 (그룹/위치/OS/백신/담당자 등) 반환"""
+    from app.services.report_builder.data_fetchers import fetch_asset_rows
+    return await fetch_asset_rows(0, None, db)
+
+
 # ─── 컬렉션 경로 ────────────────────────────────────────────────────────────────
 
 @router.get("", response_model=list[AssetRead])

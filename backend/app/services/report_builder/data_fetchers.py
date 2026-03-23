@@ -43,6 +43,7 @@ def _asset_row(a, groups, locs, eq_types, os_map, av_map, persons, depts) -> dic
     mgr_dept = depts.get(mgr.dept_id) if mgr and mgr.dept_id else None
     sup_dept = depts.get(sup.dept_id) if sup and sup.dept_id else None
     return {
+        "id":                  a.id,
         "asset_code":          a.asset_code or "",
         "asset_name":          a.asset_name or "",
         "model_name":          a.model_name or "",
