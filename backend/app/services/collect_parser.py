@@ -14,7 +14,7 @@ from app.models.asset import Asset
 
 
 async def parse_powershell_json(data: dict, asset_id: int, db: AsyncSession) -> dict:
-    collected_at = data.get("_meta", {}).get("collected_at", datetime.now().isoformat())
+    collected_at = _parse_datetime(data.get("_meta", {}).get("collected_at"))
     summary = {}
 
     if "system" in data:
@@ -162,7 +162,7 @@ async def parse_legacy_zip(zip_bytes: bytes, asset_id: int, db: AsyncSession) ->
         "process.txt": ("process", None),
     }
 
-    result_data: dict = {"_meta": {"collected_at": datetime.now().isoformat(), "hostname": "legacy"}}
+    result_data: dict = {"_meta": {"collected_at": datetime.now(), "hostname": "legacy"}}
 
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
         for zpath in zf.namelist():
@@ -221,3 +221,15 @@ def _extract_ip(val) -> Optional[str]:
     if isinstance(val, list): val = val[0] if val else None
     if isinstance(val, dict): val = val.get("IPAddress")
     return str(val).strip() if val else None
+
+def _parse_datetime(val) -> datetime:
+    """ISO 문자열 또는 datetime 객체를 datetime으로 변환. asyncpg는 str 거부."""
+    if val is None:
+        return datetime.now()
+    if isinstance(val, datetime):
+        return val
+    try:
+        # Python 3.11+ fromisoformat handles timezone offsets like +09:00
+        return datetime.fromisoformat(str(val))
+    except (ValueError, TypeError):
+        return datetime.now()

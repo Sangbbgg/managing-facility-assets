@@ -39,8 +39,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        VITE_API_URL: http://${HOST_IP}:${BACKEND_PORT}
     container_name: asset-frontend
     restart: unless-stopped
     ports:
