@@ -1,5 +1,6 @@
 <template>
   <n-config-provider :locale="koKR" :date-locale="dateKoKR">
+    <n-dialog-provider>
     <n-message-provider>
       <n-layout style="height:100vh">
         <n-layout-header bordered style="height:56px;padding:0 16px;display:flex;align-items:center">
@@ -13,6 +14,7 @@
         </n-layout>
       </n-layout>
     </n-message-provider>
+    </n-dialog-provider>
   </n-config-provider>
 </template>
 

@@ -17,3 +17,4 @@ from app.models.sw_info import AssetSwProduct, AssetSwHotfix, AssetSwProcess
 from app.models.custom_field import AssetCustomField
 from app.models.layout import ColumnLayout
 from app.models.collect_script import CollectScript
+from app.models.report import ReportTemplate
