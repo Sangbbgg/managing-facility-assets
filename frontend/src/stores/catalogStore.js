@@ -1,11 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { osCatalogApi, avCatalogApi } from '@/api/catalogsApi'
+import { osCatalogApi, avCatalogApi, equipmentTypeApi } from '@/api/catalogsApi'
 
 export const useCatalogStore = defineStore('catalog', () => {
-  const osList    = ref([])
-  const avList    = ref([])
-  const loading   = ref(false)
+  const osList         = ref([])
+  const avList         = ref([])
+  const equipmentTypes = ref([])
+  const loading        = ref(false)
 
   async function fetchOs() {
     loading.value = true
@@ -27,5 +28,19 @@ export const useCatalogStore = defineStore('catalog', () => {
   async function updateAv(id, body)   { const item = await avCatalogApi.update(id, body); const idx = avList.value.findIndex(o => o.id === id); if (idx !== -1) avList.value[idx] = item }
   async function removeAv(id)         { await avCatalogApi.remove(id); avList.value = avList.value.filter(o => o.id !== id) }
 
-  return { osList, avList, loading, fetchOs, fetchAv, createOs, updateOs, removeOs, createAv, updateAv, removeAv }
+  async function fetchEquipmentTypes() {
+    loading.value = true
+    try { equipmentTypes.value = await equipmentTypeApi.list() }
+    finally { loading.value = false }
+  }
+
+  // aliases for backward compat
+  const fetchOsList = fetchOs
+  const fetchAvList = fetchAv
+
+  return {
+    osList, avList, equipmentTypes, loading,
+    fetchOs, fetchAv, fetchOsList, fetchAvList, fetchEquipmentTypes,
+    createOs, updateOs, removeOs, createAv, updateAv, removeAv,
+  }
 })

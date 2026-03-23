@@ -37,5 +37,15 @@ export const useAssetStore = defineStore('asset', () => {
     list.value = list.value.filter(a => a.id !== id)
   }
 
-  return { list, current, loading, total, fetchList, fetchOne, create, update, remove }
+  async function previewCode(groupId, typeId) {
+    return await assetsApi.previewCode(groupId, typeId)
+  }
+
+  async function bulkCreate(file) {
+    const formData = new FormData()
+    formData.append('file', file)
+    return await assetsApi.bulkRegister(formData)
+  }
+
+  return { list, current, loading, total, fetchList, fetchOne, create, update, remove, previewCode, bulkCreate }
 })
