@@ -27,6 +27,8 @@ import { NIcon } from 'naive-ui'
 import {
   HomeOutline,
   ServerOutline,
+  AddCircleOutline,
+  ListOutline,
   DocumentTextOutline,
   CloudUploadOutline,
   LocationOutline,
@@ -50,7 +52,16 @@ function icon(component) {
 
 const menuOptions = [
   { label: '대시보드', key: '/dashboard', icon: icon(HomeOutline) },
-  { label: '자산 목록', key: '/assets', icon: icon(ServerOutline) },
+  {
+    label: '자산 관리',
+    key: 'assets',
+    icon: icon(ServerOutline),
+    children: [
+      { label: '자산 현황',   key: '/assets',          icon: icon(ListOutline) },
+      { label: '자산 등록',   key: '/assets/register', icon: icon(AddCircleOutline) },
+      { label: '자산 세부사항', key: '/assets/details', icon: icon(ServerOutline) },
+    ],
+  },
   {
     label: '보고서',
     key: 'reports',

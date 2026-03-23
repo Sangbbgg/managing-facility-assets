@@ -60,4 +60,5 @@ class AssetRead(BaseModel):
     av_id: Optional[int] = None
     manager_id: Optional[int] = None
     supervisor_id: Optional[int] = None
+    last_collected_at: Optional[datetime] = None
     model_config = {"from_attributes": True}
