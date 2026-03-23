@@ -8,8 +8,8 @@ export const personsApi = {
 }
 
 export const departmentsApi = {
-  list:   ()       => client.get('/api/departments').then(r => r.data),
-  create: (body)   => client.post('/api/departments', body).then(r => r.data),
-  update: (id, body) => client.patch(`/api/departments/${id}`, body).then(r => r.data),
-  remove: (id)     => client.delete(`/api/departments/${id}`),
+  list:   ()         => client.get('/api/persons/departments').then(r => r.data),
+  create: (body)     => client.post('/api/persons/departments', body).then(r => r.data),
+  update: (id, body) => client.patch(`/api/persons/departments/${id}`, body).then(r => r.data),
+  remove: (id)       => client.delete(`/api/persons/departments/${id}`),
 }

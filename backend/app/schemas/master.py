@@ -112,6 +112,10 @@ class DepartmentBase(BaseModel):
 class DepartmentCreate(DepartmentBase):
     pass
 
+class DepartmentUpdate(BaseModel):
+    name: Optional[str] = None
+    code: Optional[str] = None
+
 class DepartmentRead(DepartmentBase):
     id: int
     model_config = {"from_attributes": True}

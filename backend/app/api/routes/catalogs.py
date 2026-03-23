@@ -41,6 +41,13 @@ async def update_equipment_type(type_id: int, body: EquipmentTypeUpdate, db: Asy
     return row
 
 
+@router.delete("/equipment-types/{type_id}", status_code=204)
+async def delete_equipment_type(type_id: int, db: AsyncSession = Depends(get_db)):
+    row = await db.get(EquipmentType, type_id)
+    if row:
+        await db.delete(row)
+
+
 # ── OS Catalog ────────────────────────────────────────────────
 
 @router.get("/os", response_model=list[OsCatalogRead])
@@ -70,6 +77,13 @@ async def update_os(os_id: int, body: OsCatalogUpdate, db: AsyncSession = Depend
     return row
 
 
+@router.delete("/os/{os_id}", status_code=204)
+async def delete_os(os_id: int, db: AsyncSession = Depends(get_db)):
+    row = await db.get(OsCatalog, os_id)
+    if row:
+        await db.delete(row)
+
+
 # ── Antivirus Catalog ─────────────────────────────────────────
 
 @router.get("/av", response_model=list[AntivirusCatalogRead])
@@ -97,3 +111,10 @@ async def update_av(av_id: int, body: AntivirusCatalogUpdate, db: AsyncSession =
     await db.flush()
     await db.refresh(row)
     return row
+
+
+@router.delete("/av/{av_id}", status_code=204)
+async def delete_av(av_id: int, db: AsyncSession = Depends(get_db)):
+    row = await db.get(AntivirusCatalog, av_id)
+    if row:
+        await db.delete(row)

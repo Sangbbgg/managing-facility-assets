@@ -25,5 +25,15 @@ export const usePersonStore = defineStore('person', () => {
   async function updateDept(id, body)     { const item = await departmentsApi.update(id, body); const idx = deptList.value.findIndex(d => d.id === id); if (idx !== -1) deptList.value[idx] = item }
   async function removeDept(id)           { await departmentsApi.remove(id); deptList.value = deptList.value.filter(d => d.id !== id) }
 
-  return { personList, deptList, loading, fetchPersons, fetchDepts, createPerson, updatePerson, removePerson, createDept, updateDept, removeDept }
+  // 다른 스토어와 일관성 유지를 위한 alias
+  const list      = personList
+  const fetchList = fetchPersons
+
+  return {
+    personList, deptList, loading,
+    list, fetchList,                           // alias
+    fetchPersons, fetchDepts,
+    createPerson, updatePerson, removePerson,
+    createDept, updateDept, removeDept,
+  }
 })
