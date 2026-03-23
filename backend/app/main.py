@@ -131,6 +131,129 @@ _COLLECT_SCRIPTS_SEED = [
 ]
 
 
+_DEFAULT_TEMPLATES = [
+    {
+        "name": "형상관리대장", "display_name": "형상관리대장",
+        "data_source": "형상관리대장", "sheet_name": "형상관리대장", "header_color": "#1F4E79",
+        "columns": [
+            {"header": "자산코드",  "field": "asset_code",          "width": 18},
+            {"header": "설비명",    "field": "asset_name",          "width": 20},
+            {"header": "그룹",      "field": "group_name",          "width": 20},
+            {"header": "위치",      "field": "location_full_path",  "width": 20},
+            {"header": "장비종류",  "field": "equipment_type_name", "width": 12},
+            {"header": "OS",        "field": "os_name",             "width": 22},
+            {"header": "백신",      "field": "av_name",             "width": 22},
+            {"header": "IP",        "field": "ip_address",          "width": 16},
+            {"header": "시리얼",    "field": "serial_number",       "width": 18},
+            {"header": "중요도",    "field": "importance",          "width": 8},
+            {"header": "설치일",    "field": "install_date",        "width": 12},
+            {"header": "상태",      "field": "status",              "width": 10},
+        ],
+    },
+    {
+        "name": "설비관리대장", "display_name": "설비관리대장",
+        "data_source": "설비관리대장", "sheet_name": "설비관리대장", "header_color": "#1F4E79",
+        "columns": [
+            {"header": "자산코드", "field": "asset_code",     "width": 18},
+            {"header": "설비명",   "field": "asset_name",     "width": 20},
+            {"header": "담당자",   "field": "manager_name",   "width": 12},
+            {"header": "직책",     "field": "manager_title",  "width": 10},
+            {"header": "부서",     "field": "manager_dept",   "width": 16},
+            {"header": "연락처",   "field": "manager_contact","width": 18},
+            {"header": "책임자",   "field": "supervisor_name","width": 12},
+            {"header": "상태",     "field": "status",         "width": 10},
+        ],
+    },
+    {
+        "name": "예방점검_월간", "display_name": "예방점검 월간보고서",
+        "data_source": "예방점검_월간", "sheet_name": "예방점검_월간", "header_color": "#1F4E79",
+        "columns": [
+            {"header": "자산코드", "field": "asset_code",     "width": 18},
+            {"header": "설비명",   "field": "asset_name",     "width": 20},
+            {"header": "점검일",   "field": "record_date",    "width": 12},
+            {"header": "점검유형", "field": "inspection_type","width": 10},
+            {"header": "결과",     "field": "result",         "width": 8},
+            {"header": "점검자",   "field": "inspector",      "width": 12},
+            {"header": "특이사항", "field": "special_notes",  "width": 30},
+        ],
+    },
+    {
+        "name": "예방점검_분기", "display_name": "예방점검 분기보고서",
+        "data_source": "예방점검_분기", "sheet_name": "예방점검_분기", "header_color": "#1F4E79",
+        "columns": [
+            {"header": "자산코드", "field": "asset_code",     "width": 18},
+            {"header": "설비명",   "field": "asset_name",     "width": 20},
+            {"header": "점검일",   "field": "record_date",    "width": 12},
+            {"header": "점검유형", "field": "inspection_type","width": 10},
+            {"header": "결과",     "field": "result",         "width": 8},
+            {"header": "점검자",   "field": "inspector",      "width": 12},
+            {"header": "특이사항", "field": "special_notes",  "width": 30},
+        ],
+    },
+    {
+        "name": "이벤트로그", "display_name": "이벤트로그",
+        "data_source": "이벤트로그", "sheet_name": "이벤트로그", "header_color": "#1F4E79",
+        "columns": [
+            {"header": "자산코드",  "field": "asset_code",  "width": 18},
+            {"header": "설비명",    "field": "asset_name",  "width": 20},
+            {"header": "날짜",      "field": "record_date", "width": 12},
+            {"header": "로그유형",  "field": "log_type",    "width": 10},
+            {"header": "이벤트ID",  "field": "event_id",    "width": 12},
+            {"header": "레벨",      "field": "level",       "width": 10},
+            {"header": "건수",      "field": "count",       "width": 8},
+        ],
+    },
+    {
+        "name": "콘솔접속대장", "display_name": "콘솔접속대장",
+        "data_source": "콘솔접속대장", "sheet_name": "콘솔접속대장", "header_color": "#1F4E79",
+        "columns": [
+            {"header": "자산코드", "field": "asset_code", "width": 18},
+            {"header": "설비명",   "field": "asset_name", "width": 20},
+            {"header": "접속일",   "field": "access_date","width": 12},
+            {"header": "접속자",   "field": "accessor",   "width": 14},
+            {"header": "목적",     "field": "purpose",    "width": 30},
+        ],
+    },
+    {
+        "name": "봉인지관리대장", "display_name": "봉인지관리대장",
+        "data_source": "봉인지관리대장", "sheet_name": "봉인지관리대장", "header_color": "#1F4E79",
+        "columns": [
+            {"header": "자산코드", "field": "asset_code",  "width": 18},
+            {"header": "설비명",   "field": "asset_name",  "width": 20},
+            {"header": "봉인일",   "field": "record_date", "width": 12},
+            {"header": "봉인번호", "field": "seal_number", "width": 16},
+            {"header": "구분",     "field": "action",      "width": 10},
+            {"header": "담당자",   "field": "handler",     "width": 12},
+            {"header": "비고",     "field": "notes",       "width": 30},
+        ],
+    },
+    {
+        "name": "비밀번호관리대장", "display_name": "비밀번호관리대장",
+        "data_source": "비밀번호관리대장", "sheet_name": "비밀번호관리대장", "header_color": "#1F4E79",
+        "columns": [
+            {"header": "자산코드", "field": "asset_code",   "width": 18},
+            {"header": "설비명",   "field": "asset_name",   "width": 20},
+            {"header": "계정명",   "field": "account_name", "width": 20},
+            {"header": "변경일",   "field": "changed_date", "width": 12},
+            {"header": "변경자",   "field": "changed_by",   "width": 14},
+            {"header": "비고",     "field": "notes",        "width": 30},
+        ],
+    },
+]
+
+
+async def _seed_report_templates():
+    """report_templates 테이블이 비어있으면 기본 8개 서식 삽입"""
+    from app.models.report import ReportTemplate
+    async with AsyncSessionLocal() as session:
+        count = await session.scalar(select(ReportTemplate).limit(1))
+        if count is not None:
+            return
+        for tmpl in _DEFAULT_TEMPLATES:
+            session.add(ReportTemplate(**tmpl))
+        await session.commit()
+
+
 async def _seed_collect_scripts():
     """collect_scripts 테이블이 비어있으면 초기 9건 삽입"""
     from app.models.collect_script import CollectScript
@@ -149,6 +272,7 @@ async def _seed_collect_scripts():
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await _seed_report_templates()
     await _seed_collect_scripts()
     yield
     await engine.dispose()
