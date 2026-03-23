@@ -2,7 +2,7 @@
   <PageShell title="자산 현황">
     <!-- 툴바 -->
     <n-space justify="space-between" style="margin-bottom:12px;" wrap>
-      <n-space wrap>
+      <n-space wrap align="center">
         <LayoutSelector
           :columns="activeColumns"
           page-key="asset_list"
@@ -13,13 +13,12 @@
           :default-columns="DEFAULT_COLUMNS"
           @update:columns="onColumnsUpdate"
         />
-        <n-text depth="3" style="font-size:12px; line-height:32px;">
-          {{ visibleCount }}개 컬럼 / {{ filteredAssets.length }}건
+        <n-text depth="3" style="font-size:12px;">
+          {{ visibleCount }}개 컬럼 표시 / 전체 {{ assets.length }}건
         </n-text>
       </n-space>
 
       <n-space wrap align="center">
-        <!-- 검색 컬럼 선택 -->
         <n-select
           v-model:value="searchField"
           :options="searchFieldOptions"
@@ -32,17 +31,26 @@
           clearable
           style="width:200px;"
           size="small"
+          @keydown.enter="() => {}"
         />
         <n-select
           v-model:value="filterStatus"
           :options="statusOptions"
           clearable
-          placeholder="상태"
+          placeholder="상태 필터"
           style="width:110px;"
           size="small"
         />
+        <n-text depth="3" style="font-size:12px;">
+          {{ filteredAssets.length }}건
+        </n-text>
       </n-space>
     </n-space>
+
+    <!-- 드래그 힌트 -->
+    <n-text depth="3" style="font-size:11px; display:block; margin-bottom:6px;">
+      💡 컬럼 헤더를 드래그하여 순서를 변경할 수 있습니다
+    </n-text>
 
     <!-- 데이터 테이블 -->
     <n-data-table
@@ -55,7 +63,6 @@
       :scroll-x="scrollX"
       striped
       size="small"
-      style="min-height:400px;"
     />
   </PageShell>
 </template>
@@ -71,7 +78,7 @@ import client from '@/api/client'
 
 const router  = useRouter()
 const loading = ref(false)
-const assets  = ref([])   // enriched rows
+const assets  = ref([])
 
 // ── 데이터 로드 ────────────────────────────────────────────────
 async function fetchAssets() {
@@ -86,17 +93,17 @@ async function fetchAssets() {
 
 // ── 전체 컬럼 정의 ─────────────────────────────────────────────
 const DEFAULT_COLUMNS = [
-  { key: 'asset_code',          label: '자산코드',      width: 160, visible: true },
-  { key: 'asset_name',          label: '설비명',        width: 180, visible: true },
-  { key: 'importance',          label: '중요도',        width: 70,  visible: true },
-  { key: 'status',              label: '상태',          width: 90,  visible: true },
-  { key: 'group_name',          label: '그룹',          width: 150, visible: true },
-  { key: 'location_full_path',  label: '위치',          width: 200, visible: true },
-  { key: 'equipment_type_name', label: '장비종류',      width: 110, visible: true },
-  { key: 'os_name',             label: 'OS',            width: 180, visible: true },
-  { key: 'av_name',             label: '백신',          width: 150, visible: true },
-  { key: 'ip_address',          label: 'IP 주소',       width: 130, visible: true },
-  { key: 'install_date',        label: '설치일',        width: 100, visible: true },
+  { key: 'asset_code',          label: '자산코드',      width: 160, visible: true  },
+  { key: 'asset_name',          label: '설비명',        width: 180, visible: true  },
+  { key: 'importance',          label: '중요도',        width: 70,  visible: true  },
+  { key: 'status',              label: '상태',          width: 90,  visible: true  },
+  { key: 'group_name',          label: '그룹',          width: 150, visible: true  },
+  { key: 'location_full_path',  label: '위치',          width: 200, visible: true  },
+  { key: 'equipment_type_name', label: '장비종류',      width: 110, visible: true  },
+  { key: 'os_name',             label: 'OS',            width: 180, visible: true  },
+  { key: 'av_name',             label: '백신',          width: 150, visible: true  },
+  { key: 'ip_address',          label: 'IP 주소',       width: 130, visible: true  },
+  { key: 'install_date',        label: '설치일',        width: 100, visible: true  },
   { key: 'model_name',          label: '모델명',        width: 160, visible: false },
   { key: 'serial_number',       label: '시리얼번호',    width: 140, visible: false },
   { key: 'purpose',             label: '용도',          width: 160, visible: false },
@@ -137,10 +144,9 @@ function onColumnsUpdate(cols) {
   activeColumns.value = cols
 }
 
-// ── 상태 관련 ─────────────────────────────────────────────────
+// ── 상태 ─────────────────────────────────────────────────────
 const STATUS_LABELS = { OPERATING: '운영중', MAINTENANCE: '점검중', FAULTY: '장애', DISPOSED: '폐기' }
 const STATUS_TYPES  = { OPERATING: 'success', MAINTENANCE: 'warning', FAULTY: 'error', DISPOSED: 'default' }
-
 const statusOptions = [
   { label: '운영중', value: 'OPERATING' },
   { label: '점검중', value: 'MAINTENANCE' },
@@ -151,7 +157,7 @@ const statusOptions = [
 // ── 검색 ─────────────────────────────────────────────────────
 const search       = ref('')
 const filterStatus = ref(null)
-const searchField  = ref('__all__')   // '__all__' = 전체 컬럼
+const searchField  = ref('__all__')
 
 const searchFieldOptions = computed(() => [
   { label: '전체 컬럼', value: '__all__' },
@@ -168,44 +174,112 @@ const filteredAssets = computed(() => {
   if (search.value.trim()) {
     const q = search.value.trim().toLowerCase()
     if (searchField.value === '__all__') {
-      // 표시 중인 모든 컬럼에서 검색
       const visibleKeys = activeColumns.value.filter(c => c.visible).map(c => c.key)
-      data = data.filter(a =>
-        visibleKeys.some(k => String(a[k] ?? '').toLowerCase().includes(q))
-      )
+      data = data.filter(a => visibleKeys.some(k => String(a[k] ?? '').toLowerCase().includes(q)))
     } else {
-      data = data.filter(a =>
-        String(a[searchField.value] ?? '').toLowerCase().includes(q)
-      )
+      data = data.filter(a => String(a[searchField.value] ?? '').toLowerCase().includes(q))
     }
   }
   return data
 })
 
-// ── 테이블 컬럼 빌더 ──────────────────────────────────────────
-const tableColumns = computed(() =>
-  activeColumns.value
+// ── 컬럼 헤더 드래그앤드롭 ────────────────────────────────────
+const dragKey     = ref(null)   // 드래그 중인 컬럼 key
+const dropKey     = ref(null)   // 드롭 대상 컬럼 key
+
+function reorderColumns(fromKey, toKey) {
+  const cols = [...activeColumns.value]
+  const fromIdx = cols.findIndex(c => c.key === fromKey)
+  const toIdx   = cols.findIndex(c => c.key === toKey)
+  if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return
+  const [moved] = cols.splice(fromIdx, 1)
+  cols.splice(toIdx, 0, moved)
+  activeColumns.value = cols
+}
+
+// ── 테이블 컬럼 ───────────────────────────────────────────────
+const tableColumns = computed(() => {
+  // 반응성 트래킹: drag 상태 변화 시 재계산
+  const _dragKey = dragKey.value
+  const _dropKey = dropKey.value
+
+  return activeColumns.value
     .filter(c => c.visible)
-    .map(c => ({
-      title:    c.label,
-      key:      c.key,
-      width:    c.width,
-      ellipsis: { tooltip: true },
-      render: (row) => {
-        const val = row[c.key]
-        if (c.key === 'status') {
-          return h(NTag, {
-            type: STATUS_TYPES[val] ?? 'default',
-            size: 'small',
-          }, { default: () => STATUS_LABELS[val] ?? val ?? '-' })
-        }
-        return val != null && val !== '' ? val : '-'
-      },
-    }))
-)
+    .map(c => {
+      const isDropTarget = _dropKey === c.key && _dragKey !== c.key
+
+      return {
+        key:      c.key,
+        width:    c.width,
+        ellipsis: { tooltip: true },
+
+        // 드래그 가능한 커스텀 헤더
+        title: () => h(
+          'div',
+          {
+            draggable: true,
+            style: {
+              display:        'flex',
+              alignItems:     'center',
+              gap:            '4px',
+              cursor:         'grab',
+              userSelect:     'none',
+              padding:        '0 2px',
+              height:         '100%',
+              borderLeft:     isDropTarget ? '3px solid #4098fc' : '3px solid transparent',
+              opacity:        _dragKey === c.key ? 0.45 : 1,
+              transition:     'border-color 0.1s, opacity 0.1s',
+            },
+            onDragstart: (e) => {
+              e.dataTransfer.effectAllowed = 'move'
+              e.dataTransfer.setData('text/plain', c.key)
+              dragKey.value = c.key
+            },
+            onDragover: (e) => {
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'move'
+              if (dropKey.value !== c.key) dropKey.value = c.key
+            },
+            onDragleave: () => {
+              if (dropKey.value === c.key) dropKey.value = null
+            },
+            onDrop: (e) => {
+              e.preventDefault()
+              const from = e.dataTransfer.getData('text/plain') || dragKey.value
+              if (from && from !== c.key) reorderColumns(from, c.key)
+              dragKey.value = null
+              dropKey.value = null
+            },
+            onDragend: () => {
+              dragKey.value = null
+              dropKey.value = null
+            },
+          },
+          [
+            h('span', { style: 'color:#bbb; font-size:11px; flex-shrink:0;' }, '⠿'),
+            h('span', c.label),
+          ]
+        ),
+
+        // 셀 렌더러
+        render: (row) => {
+          const val = row[c.key]
+          if (c.key === 'status') {
+            return h(NTag, {
+              type: STATUS_TYPES[val] ?? 'default',
+              size: 'small',
+            }, { default: () => STATUS_LABELS[val] ?? val ?? '-' })
+          }
+          return val != null && val !== '' ? val : '-'
+        },
+      }
+    })
+})
 
 const scrollX = computed(() =>
-  activeColumns.value.filter(c => c.visible).reduce((sum, c) => sum + (c.width ?? 150), 0)
+  activeColumns.value
+    .filter(c => c.visible)
+    .reduce((sum, c) => sum + (c.width ?? 150), 0)
 )
 
 // ── 행 클릭 ───────────────────────────────────────────────────
