@@ -36,6 +36,26 @@
           <n-input v-model:value="form.ip_address" placeholder="192.168.x.x" />
         </n-form-item>
 
+        <n-form-item label="중요도" path="importance">
+          <n-radio-group v-model:value="form.importance">
+            <n-radio value="상">상</n-radio>
+            <n-radio value="중">중</n-radio>
+            <n-radio value="하">하</n-radio>
+          </n-radio-group>
+        </n-form-item>
+
+        <n-form-item label="상태" path="status">
+          <n-select
+            v-model:value="form.status"
+            :options="[
+              { label: '운용중', value: 'OPERATING' },
+              { label: '유지보수', value: 'MAINTENANCE' },
+              { label: '장애', value: 'FAULTY' },
+              { label: '폐기', value: 'DISPOSED' },
+            ]"
+          />
+        </n-form-item>
+
         <n-form-item label="OS" path="os_id">
           <n-select v-model:value="form.os_id" :options="osOptions" placeholder="OS 선택" clearable filterable />
         </n-form-item>
@@ -56,12 +76,8 @@
           <n-input v-model:value="form.purpose" placeholder="용도 설명" type="textarea" :rows="2" />
         </n-form-item>
 
-        <n-form-item label="도입일" path="purchase_date">
-          <n-date-picker v-model:formatted-value="form.purchase_date" type="date" clearable value-format="yyyy-MM-dd" />
-        </n-form-item>
-
-        <n-form-item label="비고" path="notes">
-          <n-input v-model:value="form.notes" placeholder="비고" type="textarea" :rows="2" />
+        <n-form-item label="설치일" path="install_date">
+          <n-date-picker v-model:formatted-value="form.install_date" type="date" clearable value-format="yyyy-MM-dd" />
         </n-form-item>
 
         <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
@@ -78,11 +94,11 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import PageShell from '@/components/common/PageShell.vue'
-import { useAssetStore }   from '@/stores/assetStore'
-import { useGroupStore }   from '@/stores/groupStore'
+import { useAssetStore }    from '@/stores/assetStore'
+import { useGroupStore }    from '@/stores/groupStore'
 import { useLocationStore } from '@/stores/locationStore'
-import { useCatalogStore } from '@/stores/catalogStore'
-import { usePersonStore }  from '@/stores/personStore'
+import { useCatalogStore }  from '@/stores/catalogStore'
+import { usePersonStore }   from '@/stores/personStore'
 import client from '@/api/client'
 
 const route   = useRoute()
@@ -94,24 +110,25 @@ const locationStore = useLocationStore()
 const catalogStore  = useCatalogStore()
 const personStore   = usePersonStore()
 
-const isEdit = computed(() => !!route.params.id)
+const isEdit  = computed(() => !!route.params.id)
 const formRef = ref(null)
 const saving  = ref(false)
 
 const form = ref({
   asset_name: '', group_id: null, equipment_type_id: null,
   location_id: null, model_name: '', serial_number: '',
-  ip_address: '', os_id: null, av_id: null,
+  ip_address: '', importance: '중', status: 'OPERATING',
+  os_id: null, av_id: null,
   manager_id: null, supervisor_id: null,
-  purpose: '', purchase_date: null, notes: '',
+  purpose: '', install_date: null,
 })
 
 const required = (msg) => ({ required: true, message: msg, trigger: ['blur', 'change'] })
 
 const groupOptions    = computed(() => groupStore.codeable.map(g => ({ label: `${g.full_path || g.name} [${g.code}]`, value: g.id })))
 const locationOptions = computed(() => locationStore.list.map(l => ({ label: l.full_path || l.name, value: l.id })))
-const osOptions       = computed(() => catalogStore.osList.map(o => ({ label: `${o.name} ${o.version || ''}`, value: o.id })))
-const avOptions       = computed(() => catalogStore.avList.map(a => ({ label: `${a.name} ${a.version || ''}`, value: a.id })))
+const osOptions       = computed(() => catalogStore.osList.map(o => ({ label: `${o.name} ${o.version || ''}`.trim(), value: o.id })))
+const avOptions       = computed(() => catalogStore.avList.map(a => ({ label: `${a.name} ${a.version || ''}`.trim(), value: a.id })))
 const personOptions   = computed(() => personStore.personList.map(p => ({ label: p.name, value: p.id })))
 const typeOptions     = ref([])
 
