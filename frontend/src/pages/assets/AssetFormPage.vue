@@ -133,7 +133,7 @@ const personOptions   = computed(() => personStore.personList.map(p => ({ label:
 const typeOptions     = ref([])
 
 async function loadTypes() {
-  const data = await client.get('/api/equipment-types').then(r => r.data)
+  const data = await client.get('/api/catalogs/equipment-types').then(r => r.data)
   typeOptions.value = data.map(t => ({ label: t.name, value: t.id }))
 }
 

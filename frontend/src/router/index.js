@@ -16,5 +16,6 @@ export default createRouter({
     { path: '/settings/av', component: () => import('@/pages/settings/AvCatalogPage.vue') },
     { path: '/settings/persons', component: () => import('@/pages/settings/PersonPage.vue') },
     { path: '/settings/departments', component: () => import('@/pages/settings/DepartmentPage.vue') },
+    { path: '/settings/equipment-types', component: () => import('@/pages/settings/EquipmentTypePage.vue') },
   ],
 })
