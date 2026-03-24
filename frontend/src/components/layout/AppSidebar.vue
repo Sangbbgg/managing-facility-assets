@@ -67,8 +67,10 @@ const menuOptions = [
     key: 'reports',
     icon: icon(DocumentTextOutline),
     children: [
-      { label: '보고서 생성', key: '/reports', icon: icon(DocumentTextOutline) },
-      { label: 'EVTX 업로드', key: '/reports/evtx', icon: icon(CloudUploadOutline) },
+      { label: '보고서 생성',  key: '/reports',                 icon: icon(DocumentTextOutline) },
+      { label: 'EVTX 업로드', key: '/reports/evtx',             icon: icon(CloudUploadOutline) },
+      { label: '양식 관리',   key: '/reports/form-templates',   icon: icon(DocumentTextOutline) },
+      { label: '양식 보고서', key: '/reports/form-report',      icon: icon(DocumentTextOutline) },
     ],
   },
   {
