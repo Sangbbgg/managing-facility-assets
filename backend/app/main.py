@@ -3,7 +3,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import engine
 from app.models import Base  # noqa: F401 — 모든 모델 등록
-from app.api.routes import health, locations, groups, assets, catalogs, persons, reports, evtx, form_templates
+from app.api.routes import (
+    health, locations, groups, assets, catalogs, persons,
+    reports, evtx, form_templates,
+    hardware, software, custom_fields, collect, layouts,
+)
 
 
 @asynccontextmanager
@@ -30,5 +34,10 @@ app.include_router(assets.router,    prefix="/api/assets",     tags=["assets"])
 app.include_router(catalogs.router,  prefix="/api/catalogs",   tags=["catalogs"])
 app.include_router(persons.router,   prefix="/api/persons",    tags=["persons"])
 app.include_router(reports.router,   prefix="/api/reports",    tags=["reports"])
-app.include_router(evtx.router,      prefix="/api/evtx",       tags=["evtx"])
-app.include_router(form_templates.router, prefix="/api/form-templates", tags=["양식 보고서"])
+app.include_router(evtx.router,           prefix="/api/evtx",           tags=["evtx"])
+app.include_router(form_templates.router, prefix="/api/form-templates",  tags=["양식 보고서"])
+app.include_router(hardware.router,       prefix="/api/assets",          tags=["hardware"])
+app.include_router(software.router,       prefix="/api/assets",          tags=["software"])
+app.include_router(custom_fields.router,  prefix="/api/assets",          tags=["custom-fields"])
+app.include_router(collect.router,        prefix="/api/collect",         tags=["collect"])
+app.include_router(layouts.router,        prefix="/api/layouts",         tags=["layouts"])
