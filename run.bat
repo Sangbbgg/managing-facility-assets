@@ -533,6 +533,7 @@ goto BACK
 ::
 ::   What it does:
 ::     - Truncates ALL tables (deletes all data, resets sequences)
+::     - Rebuilds backend image (picks up latest seed.py changes)
 ::     - Restarts backend to re-run seed data
 ::
 ::   WARNING: ALL data will be permanently deleted.
@@ -589,11 +590,20 @@ if %errorlevel% neq 0 (
 echo   [Done] All tables truncated.
 
 echo.
+echo  ---- Rebuilding backend image (applying latest seed.py)... ----
+docker compose build asset-backend
+if %errorlevel% neq 0 (
+    echo.
+    echo   [Error] Backend build failed. Check the error log above.
+    goto BACK
+)
+
+echo.
 echo  ---- Restarting backend to re-run seed data... ----
-docker compose restart asset-backend
+docker compose up -d asset-backend
 echo.
 echo  ---- Waiting for backend to be ready... ----
-timeout /t 5 >nul
+timeout /t 8 >nul
 docker compose ps
 echo.
 echo   [Done] DB reset complete. Seed data has been re-applied.
