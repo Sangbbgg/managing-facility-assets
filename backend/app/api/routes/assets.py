@@ -45,10 +45,10 @@ async def preview_asset_code(
 
 
 @router.get("/bulk-template")
-async def download_bulk_template():
-    """대량 등록용 엑셀 템플릿 다운로드"""
+async def download_bulk_template(db: AsyncSession = Depends(get_db)):
+    """대량 등록용 엑셀 템플릿 다운로드 (드롭다운 + 자산코드 참고 포함)"""
     from app.services.bulk_register import generate_template
-    file_path = generate_template()
+    file_path = await generate_template(db)
     return FileResponse(
         path=file_path,
         filename="자산_대량등록_템플릿.xlsx",

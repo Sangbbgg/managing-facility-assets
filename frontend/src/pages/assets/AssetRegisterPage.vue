@@ -61,16 +61,6 @@
               />
             </n-form-item>
 
-            <n-form-item label="담당자">
-              <n-select
-                v-model:value="form.manager_id"
-                :options="personOptions"
-                placeholder="담당자 선택 (선택사항)"
-                clearable
-                filterable
-              />
-            </n-form-item>
-
             <n-form-item label="중요도" path="importance">
               <n-radio-group v-model:value="form.importance">
                 <n-radio value="상">상</n-radio>
@@ -157,7 +147,6 @@ import { useAssetStore } from '@/stores/assetStore'
 import { useGroupStore } from '@/stores/groupStore'
 import { useCatalogStore } from '@/stores/catalogStore'
 import { useLocationStore } from '@/stores/locationStore'
-import { usePersonStore } from '@/stores/personStore'
 import { assetsApi } from '@/api/assetsApi'
 
 const message  = useMessage()
@@ -165,7 +154,6 @@ const assetStore   = useAssetStore()
 const groupStore   = useGroupStore()
 const catalogStore = useCatalogStore()
 const locationStore = useLocationStore()
-const personStore  = usePersonStore()
 
 const activeTab = ref('single')
 const formRef   = ref(null)
@@ -181,7 +169,6 @@ const form = ref({
   group_id: null,
   equipment_type_id: null,
   location_id: null,
-  manager_id: null,
   importance: '중',
 })
 
@@ -202,20 +189,19 @@ const listColumns = [
 const codeableGroupOptions = computed(() =>
   groupStore.list
     .filter(g => g.code)
-    .map(g => ({ label: `${g.name} (${g.code})`, value: g.id }))
+    .map(g => ({ label: `${g.full_path} (${g.code})`, value: g.id }))
 )
 
 const typeOptions = computed(() =>
   catalogStore.equipmentTypes.map(t => ({ label: `${t.name} (${t.code})`, value: t.id }))
 )
 
-const locationOptions = computed(() =>
-  locationStore.list.map(l => ({ label: l.name, value: l.id }))
-)
-
-const personOptions = computed(() =>
-  personStore.list.map(p => ({ label: p.name, value: p.id }))
-)
+const locationOptions = computed(() => {
+  const parentIds = new Set(locationStore.list.map(l => l.parent_id).filter(id => id != null))
+  return locationStore.list
+    .filter(l => !parentIds.has(l.id))
+    .map(l => ({ label: l.full_path || l.name, value: l.id }))
+})
 
 async function handleCreate() {
   try {
@@ -227,12 +213,12 @@ async function handleCreate() {
     const body = {
       ...form.value,
       install_date: installDateMs.value
-        ? new Date(installDateMs.value).toISOString().slice(0, 10)
+        ? (() => { const d = new Date(installDateMs.value); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })()
         : null,
     }
     await assetStore.create(body)
     message.success('자산이 등록되었습니다')
-    form.value = { asset_name: '', group_id: null, equipment_type_id: null, location_id: null, manager_id: null, importance: '중' }
+    form.value = { asset_name: '', group_id: null, equipment_type_id: null, location_id: null, importance: '중' }
     installDateMs.value = null
     await assetStore.fetchList()
   } catch (e) {
@@ -281,7 +267,6 @@ onMounted(async () => {
     groupStore.fetchList(),
     catalogStore.fetchEquipmentTypes(),
     locationStore.fetchList(),
-    personStore.fetchList(),
   ])
 })
 </script>

@@ -99,7 +99,7 @@ async function save() {
     const body = {
       ...form.value,
       install_date: installDateMs.value
-        ? new Date(installDateMs.value).toISOString().slice(0, 10)
+        ? (() => { const d = new Date(installDateMs.value); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })()
         : null,
     }
     await assetStore.update(props.asset.id, body)
