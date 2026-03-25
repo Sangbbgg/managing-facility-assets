@@ -34,6 +34,7 @@ echo    8. Logs (Backend)     - Live logs from backend container
 echo    9. Logs (Frontend)    - Live logs from frontend container
 echo   10. Save Images        - Export built images to files
 echo   11. Load Images        - Import images from files
+echo   12. Reset DB           - Delete all data and re-seed (DANGER)
 echo    0. Exit
 echo.
 echo  ================================================================
@@ -50,6 +51,7 @@ if "%choice%"=="8"  goto LOGS_BACK
 if "%choice%"=="9"  goto LOGS_FRONT
 if "%choice%"=="10" goto SAVE
 if "%choice%"=="11" goto LOAD
+if "%choice%"=="12" goto RESET_DB
 if "%choice%"=="0"  goto EXIT
 echo.
 echo   [!] Invalid input. Please enter a valid menu number.
@@ -523,6 +525,78 @@ if exist "docker-images\postgres-16.tar.gz" (
 echo.
 echo   [Done] Images loaded successfully.
 echo          Now run [1] Full Deploy to start the system.
+goto BACK
+
+
+:: =====================================================================
+:: [12] Reset DB
+::
+::   What it does:
+::     - Truncates ALL tables (deletes all data, resets sequences)
+::     - Restarts backend to re-run seed data
+::
+::   WARNING: ALL data will be permanently deleted.
+::   Assets, groups, locations, layouts, etc. will all be erased.
+::
+::   When to use:
+::     - Development / testing environment reset
+::     - Start fresh with seed data only
+:: =====================================================================
+:RESET_DB
+cls
+echo.
+echo  ================================================================
+echo    [12] Reset DB  -  Delete ALL data and re-seed
+echo  ================================================================
+echo.
+echo   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+echo   !! WARNING: This will permanently delete ALL database data. !!
+echo   !! Assets, layouts, groups, locations — everything gone.    !!
+echo   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+echo.
+set /p confirm1=  Are you sure? Type YES to confirm:
+if /i not "%confirm1%"=="YES" (
+    echo.
+    echo   [Cancelled] No changes made.
+    goto BACK
+)
+echo.
+set /p confirm2=  Type RESET to proceed:
+if /i not "%confirm2%"=="RESET" (
+    echo.
+    echo   [Cancelled] No changes made.
+    goto BACK
+)
+
+echo.
+echo  ---- Truncating all tables... ----
+
+:: Write SQL to temp file and copy into container
+set SQLFILE=%TEMP%\db_reset_temp.sql
+(
+  echo SELECT format^('TRUNCATE TABLE "%%s" RESTART IDENTITY CASCADE', tablename^)
+  echo FROM pg_tables WHERE schemaname = 'public';
+  echo \gexec
+) > "%SQLFILE%"
+
+docker cp "%SQLFILE%" asset-db:/tmp/reset_db.sql
+docker exec asset-db psql -U assetuser -d assetdb -f /tmp/reset_db.sql
+if %errorlevel% neq 0 (
+    echo.
+    echo   [Error] Failed to truncate tables. Is asset-db running?
+    goto BACK
+)
+echo   [Done] All tables truncated.
+
+echo.
+echo  ---- Restarting backend to re-run seed data... ----
+docker compose restart asset-backend
+echo.
+echo  ---- Waiting for backend to be ready... ----
+timeout /t 5 >nul
+docker compose ps
+echo.
+echo   [Done] DB reset complete. Seed data has been re-applied.
 goto BACK
 
 

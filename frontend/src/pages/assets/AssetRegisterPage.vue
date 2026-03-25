@@ -2,14 +2,15 @@
   <PageShell title="자산 등록">
     <!-- 등록된 자산 간소 목록 -->
     <n-card title="등록된 자산 목록" style="margin-bottom:16px;">
-      <n-data-table
-        :columns="listColumns"
-        :data="assetStore.list"
-        :loading="assetStore.loading"
-        :max-height="220"
-        size="small"
-        striped
-      />
+      <div style="max-height:220px; overflow-y:auto; border:1px solid var(--n-border-color, #e0e0e6); border-radius:3px;">
+        <n-data-table
+          :columns="listColumns"
+          :data="assetStore.list"
+          :loading="assetStore.loading"
+          size="small"
+          striped
+        />
+      </div>
     </n-card>
 
     <!-- 등록 모드 탭 -->

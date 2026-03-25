@@ -1,5 +1,5 @@
 <template>
-  <n-popover trigger="click" placement="bottom-end" :width="280">
+  <n-popover v-model:show="visible" trigger="click" placement="bottom-end" :width="280">
     <template #trigger>
       <n-button size="small">⚙ 컬럼 설정</n-button>
     </template>
@@ -39,6 +39,8 @@
 <script setup>
 import { ref, watch } from 'vue'
 
+const visible = ref(false)
+
 const props = defineProps({
   columns:        { type: Array, default: () => [] },
   defaultColumns: { type: Array, default: () => [] },
@@ -61,5 +63,6 @@ function reset() {
 }
 function apply() {
   emit('update:columns', localCols.value.map(c => ({ ...c })))
+  visible.value = false
 }
 </script>

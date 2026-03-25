@@ -6,7 +6,7 @@
         <n-layout-header bordered style="height:56px;padding:0 16px;display:flex;align-items:center">
           <span style="font-weight:600;font-size:16px">신인천빛드림본부 설비관리 시스템</span>
         </n-layout-header>
-        <n-layout has-sider>
+        <n-layout has-sider style="height:calc(100vh - 56px)">
           <AppSidebar />
           <n-layout-content content-style="padding:24px;overflow:auto">
             <router-view />

@@ -52,23 +52,33 @@
       💡 컬럼 헤더를 드래그하여 순서를 변경할 수 있습니다
     </n-text>
 
-    <!-- 데이터 테이블 -->
-    <n-data-table
-      :columns="tableColumns"
-      :data="filteredAssets"
-      :loading="loading"
-      :row-key="row => row.id"
-      :pagination="{ pageSize: 30, showSizePicker: true, pageSizes: [20, 30, 50, 100] }"
-      :row-props="rowProps"
-      :scroll-x="scrollX"
-      striped
-      size="small"
-    />
+    <!-- 스크롤 래퍼 (세로 네이티브) -->
+    <div :style="{ overflowY: 'auto', maxHeight: tableMaxHeight + 'px' }">
+      <!-- 상단 미러 가로 스크롤바 (세로 스크롤 시 상단 고정) -->
+      <div
+        ref="topScrollRef"
+        style="overflow-x:auto; overflow-y:hidden; height:14px; position:sticky; top:0; z-index:3; background:var(--n-color, #fff); border-top:1px solid #e0e0e6; border-bottom:1px solid #e0e0e6;"
+        @scroll.passive="onTopScroll"
+      >
+        <div :style="{ width: scrollX + 'px', height: '1px' }"></div>
+      </div>
+
+      <n-data-table
+        :columns="tableColumns"
+        :data="filteredAssets"
+        :loading="loading"
+        :row-key="row => row.id"
+        :row-props="rowProps"
+        :scroll-x="scrollX"
+        striped
+        size="small"
+      />
+    </div>
   </PageShell>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, computed, onMounted, h, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { NTag } from 'naive-ui'
 import PageShell from '@/components/common/PageShell.vue'
@@ -93,39 +103,39 @@ async function fetchAssets() {
 
 // ── 전체 컬럼 정의 ─────────────────────────────────────────────
 const DEFAULT_COLUMNS = [
-  { key: 'asset_code',          label: '자산코드',      width: 160, visible: true  },
-  { key: 'asset_name',          label: '설비명',        width: 180, visible: true  },
-  { key: 'importance',          label: '중요도',        width: 70,  visible: true  },
-  { key: 'status',              label: '상태',          width: 90,  visible: true  },
-  { key: 'group_name',          label: '그룹',          width: 150, visible: true  },
-  { key: 'location_full_path',  label: '위치',          width: 200, visible: true  },
-  { key: 'equipment_type_name', label: '장비종류',      width: 110, visible: true  },
-  { key: 'os_name',             label: 'OS',            width: 180, visible: true  },
-  { key: 'av_name',             label: '백신',          width: 150, visible: true  },
-  { key: 'ip_address',          label: 'IP 주소',       width: 130, visible: true  },
-  { key: 'install_date',        label: '설치일',        width: 100, visible: true  },
-  { key: 'model_name',          label: '모델명',        width: 160, visible: false },
+  { key: 'asset_code',          label: '자산코드',      width: 145, visible: true  },
+  { key: 'asset_name',          label: '설비명',        width: 160, visible: true  },
+  { key: 'importance',          label: '중요도',        width: 65,  visible: true  },
+  { key: 'status',              label: '상태',          width: 85,  visible: true  },
+  { key: 'group_name',          label: '그룹',          width: 110, visible: true  },
+  { key: 'location_full_path',  label: '위치',          width: 180, visible: true  },
+  { key: 'equipment_type_name', label: '장비종류',      width: 120, visible: true  },
+  { key: 'os_name',             label: 'OS',            width: 155, visible: true  },
+  { key: 'av_name',             label: '백신',          width: 130, visible: true  },
+  { key: 'ip_address',          label: 'IP 주소',       width: 120, visible: true  },
+  { key: 'install_date',        label: '설치일',        width: 95,  visible: true  },
+  { key: 'model_name',          label: '모델명',        width: 150, visible: false },
   { key: 'serial_number',       label: '시리얼번호',    width: 140, visible: false },
-  { key: 'purpose',             label: '용도',          width: 160, visible: false },
-  { key: 'group_full_path',     label: '그룹 경로',     width: 220, visible: false },
-  { key: 'group_code',          label: '그룹코드',      width: 100, visible: false },
-  { key: 'location_name',       label: '위치명',        width: 130, visible: false },
-  { key: 'equipment_type_code', label: '장비코드',      width: 100, visible: false },
+  { key: 'purpose',             label: '용도',          width: 150, visible: false },
+  { key: 'group_full_path',     label: '그룹 경로',     width: 210, visible: false },
+  { key: 'group_code',          label: '그룹코드',      width: 95,  visible: false },
+  { key: 'location_name',       label: '위치명',        width: 120, visible: false },
+  { key: 'equipment_type_code', label: '장비코드',      width: 90,  visible: false },
   { key: 'os_version',          label: 'OS버전',        width: 120, visible: false },
-  { key: 'os_eol_date',         label: 'OS EoL',        width: 100, visible: false },
-  { key: 'os_extended_eol',     label: 'OS 연장EoL',    width: 110, visible: false },
-  { key: 'av_version',          label: '백신버전',      width: 120, visible: false },
-  { key: 'av_support_end',      label: '백신지원종료',  width: 120, visible: false },
-  { key: 'manager_name',        label: '담당자',        width: 100, visible: false },
+  { key: 'os_eol_date',         label: 'OS EoL',        width: 95,  visible: false },
+  { key: 'os_extended_eol',     label: 'OS 연장EoL',    width: 105, visible: false },
+  { key: 'av_version',          label: '백신버전',      width: 115, visible: false },
+  { key: 'av_support_end',      label: '백신지원종료',  width: 115, visible: false },
+  { key: 'manager_name',        label: '담당자',        width: 90,  visible: false },
   { key: 'manager_title',       label: '담당자 직책',   width: 100, visible: false },
-  { key: 'manager_dept',        label: '담당 부서',     width: 130, visible: false },
-  { key: 'manager_contact',     label: '담당자 연락처', width: 140, visible: false },
-  { key: 'supervisor_name',     label: '책임자',        width: 100, visible: false },
+  { key: 'manager_dept',        label: '담당 부서',     width: 120, visible: false },
+  { key: 'manager_contact',     label: '담당자 연락처', width: 130, visible: false },
+  { key: 'supervisor_name',     label: '책임자',        width: 90,  visible: false },
   { key: 'supervisor_title',    label: '책임자 직책',   width: 100, visible: false },
-  { key: 'supervisor_dept',     label: '책임자 부서',   width: 130, visible: false },
-  { key: 'last_collected_at',   label: '최근수집일',    width: 120, visible: false },
-  { key: 'created_at',          label: '등록일',        width: 100, visible: false },
-  { key: 'updated_at',          label: '최종수정일',    width: 120, visible: false },
+  { key: 'supervisor_dept',     label: '책임자 부서',   width: 120, visible: false },
+  { key: 'last_collected_at',   label: '최근수집일',    width: 115, visible: false },
+  { key: 'created_at',          label: '등록일',        width: 95,  visible: false },
+  { key: 'updated_at',          label: '최종수정일',    width: 115, visible: false },
 ]
 
 const activeColumns = ref(DEFAULT_COLUMNS.map(c => ({ ...c })))
@@ -282,6 +292,10 @@ const scrollX = computed(() =>
     .reduce((sum, c) => sum + (c.width ?? 150), 0)
 )
 
+// 창 높이 반응형 — 툴바·헤더·여백 합산 약 200px
+const windowHeight = ref(window.innerHeight)
+const tableMaxHeight = computed(() => windowHeight.value - 200)
+
 // ── 행 클릭 ───────────────────────────────────────────────────
 function rowProps(row) {
   return {
@@ -290,5 +304,36 @@ function rowProps(row) {
   }
 }
 
-onMounted(fetchAssets)
+// ── 상단 미러 가로 스크롤바 ────────────────────────────────────
+const topScrollRef = ref(null)
+let tableScrollEl = null
+let syncing = false
+
+function onTopScroll() {
+  if (syncing || !tableScrollEl) return
+  syncing = true
+  tableScrollEl.scrollLeft = topScrollRef.value.scrollLeft
+  syncing = false
+}
+
+function onTableScroll() {
+  if (syncing || !topScrollRef.value) return
+  syncing = true
+  topScrollRef.value.scrollLeft = tableScrollEl.scrollLeft
+  syncing = false
+}
+
+const onResize = () => { windowHeight.value = window.innerHeight }
+
+onMounted(async () => {
+  await fetchAssets()
+  await nextTick()
+  tableScrollEl = document.querySelector('.n-data-table .n-scrollbar-container')
+  tableScrollEl?.addEventListener('scroll', onTableScroll, { passive: true })
+  window.addEventListener('resize', onResize)
+})
+onUnmounted(() => {
+  tableScrollEl?.removeEventListener('scroll', onTableScroll)
+  window.removeEventListener('resize', onResize)
+})
 </script>

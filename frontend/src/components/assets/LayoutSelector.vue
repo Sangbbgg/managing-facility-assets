@@ -12,6 +12,12 @@
     <n-button
       v-if="selectedId"
       size="small"
+      type="info"
+      @click="handleUpdate"
+    >수정</n-button>
+    <n-button
+      v-if="selectedId"
+      size="small"
       @click="handleSetDefault"
     >★ 기본</n-button>
     <n-button
@@ -88,6 +94,14 @@ async function handleSetDefault() {
   } catch { message.error('설정 실패') }
 }
 
+async function handleUpdate() {
+  if (!selectedId.value) return
+  try {
+    await layoutStore.update(selectedId.value, { columns_json: props.columns })
+    message.success('레이아웃이 수정되었습니다')
+  } catch { message.error('수정 실패') }
+}
+
 async function handleDelete() {
   if (!selectedId.value) return
   try {
@@ -97,5 +111,14 @@ async function handleDelete() {
   } catch { message.error('삭제 실패') }
 }
 
-onMounted(() => layoutStore.fetchList(props.pageKey))
+onMounted(async () => {
+  await layoutStore.fetchList(props.pageKey)
+  // 기본 레이아웃 자동 선택·적용
+  const def = layoutStore.list.find(l => l.is_default)
+  if (def) {
+    selectedId.value = def.id
+    layoutStore.applyCurrent(def)
+    emit('apply', def.columns_json)
+  }
+})
 </script>
