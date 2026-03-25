@@ -595,7 +595,7 @@ echo  ================================================================
 echo.
 echo   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 echo   !! WARNING: This will permanently delete ALL database data. !!
-echo   !! Assets, layouts, groups, locations — everything gone.    !!
+echo   !! Assets, layouts, groups, locations - everything gone.    !!
 echo   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 echo.
 set /p confirm1=  Are you sure? Type YES to confirm:
