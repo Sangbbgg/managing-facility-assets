@@ -100,7 +100,9 @@ if /i not "%confirm%"=="Y" goto BACK
 
 echo.
 echo  ---- Step 1: Building images... ----
-docker compose build --no-pull
+set DOCKER_BUILDKIT=0
+docker compose build
+set DOCKER_BUILDKIT=
 if %errorlevel% neq 0 (
     echo.
     echo   [Error] Build failed. Check the error log above.
@@ -159,7 +161,9 @@ if /i not "%confirm%"=="Y" goto BACK
 
 echo.
 echo  ---- Rebuilding all images... ----
-docker compose build --no-pull
+set DOCKER_BUILDKIT=0
+docker compose build
+set DOCKER_BUILDKIT=
 echo.
 echo  ---- Restarting containers... ----
 docker compose up -d
@@ -202,7 +206,9 @@ if /i not "%confirm%"=="Y" goto BACK
 
 echo.
 echo  ---- Rebuilding backend image... ----
-docker compose build --no-pull asset-backend
+set DOCKER_BUILDKIT=0
+docker compose build asset-backend
+set DOCKER_BUILDKIT=
 echo.
 echo  ---- Restarting backend container... ----
 docker compose up -d asset-backend
@@ -245,7 +251,9 @@ if /i not "%confirm%"=="Y" goto BACK
 
 echo.
 echo  ---- Rebuilding frontend image... ----
-docker compose build --no-pull asset-frontend
+set DOCKER_BUILDKIT=0
+docker compose build asset-frontend
+set DOCKER_BUILDKIT=
 echo.
 echo  ---- Restarting frontend container... ----
 docker compose up -d asset-frontend
@@ -429,7 +437,7 @@ echo.
 echo   After saving, copy docker-images\ to the target server
 echo   and run [11] Load Images there.
 echo.
-echo   Note: Total size ~500MB-1GB. May take a few minutes.
+echo   Note: Total size ~1-2GB. May take several minutes.
 echo.
 set /p confirm=  Proceed? (Y/N):
 if /i not "%confirm%"=="Y" goto BACK
@@ -437,17 +445,29 @@ if /i not "%confirm%"=="Y" goto BACK
 if not exist "docker-images" mkdir docker-images
 
 echo.
-echo  ---- [1/3] Saving frontend image... ----
+echo  ---- [1/6] Saving frontend image... ----
 docker save managing-facility-assets-asset-frontend | gzip > docker-images\asset-frontend.tar.gz
 if %errorlevel% neq 0 echo   [Warning] Frontend image not found or save failed.
 
-echo  ---- [2/3] Saving backend image... ----
+echo  ---- [2/6] Saving backend image... ----
 docker save managing-facility-assets-asset-backend | gzip > docker-images\asset-backend.tar.gz
 if %errorlevel% neq 0 echo   [Warning] Backend image not found or save failed.
 
-echo  ---- [3/3] Saving PostgreSQL image... ----
+echo  ---- [3/6] Saving PostgreSQL image... ----
 docker save postgres:16-alpine | gzip > docker-images\postgres-16.tar.gz
 if %errorlevel% neq 0 echo   [Warning] PostgreSQL image not found or save failed.
+
+echo  ---- [4/6] Saving Python base image (offline build support)... ----
+docker save python:3.12-slim | gzip > docker-images\python-3.12-slim.tar.gz
+if %errorlevel% neq 0 echo   [Warning] python:3.12-slim not found or save failed.
+
+echo  ---- [5/6] Saving Node base image (offline build support)... ----
+docker save node:20-alpine | gzip > docker-images\node-20-alpine.tar.gz
+if %errorlevel% neq 0 echo   [Warning] node:20-alpine not found or save failed.
+
+echo  ---- [6/6] Saving Nginx base image (offline build support)... ----
+docker save nginx:alpine | gzip > docker-images\nginx-alpine.tar.gz
+if %errorlevel% neq 0 echo   [Warning] nginx:alpine not found or save failed.
 
 echo.
 echo  ---- Saved files: ----
@@ -482,9 +502,12 @@ echo    [11] Load Images  -  Import images from files
 echo  ================================================================
 echo.
 echo   Expected files (./docker-images/ folder):
-echo     - asset-frontend.tar.gz
-echo     - asset-backend.tar.gz
-echo     - postgres-16.tar.gz
+echo     - asset-frontend.tar.gz    (built app image)
+echo     - asset-backend.tar.gz     (built app image)
+echo     - postgres-16.tar.gz       (DB image)
+echo     - python-3.12-slim.tar.gz  (base image for offline build)
+echo     - node-20-alpine.tar.gz    (base image for offline build)
+echo     - nginx-alpine.tar.gz      (base image for offline build)
 echo.
 echo   After loading, run [1] Full Deploy to start the system.
 echo.
@@ -501,25 +524,46 @@ set /p confirm=  Proceed? (Y/N):
 if /i not "%confirm%"=="Y" goto BACK
 
 echo.
-echo  ---- [1/3] Loading frontend image... ----
+echo  ---- [1/6] Loading frontend image... ----
 if exist "docker-images\asset-frontend.tar.gz" (
     docker load < docker-images\asset-frontend.tar.gz
 ) else (
     echo   [Warning] asset-frontend.tar.gz not found. Skipping.
 )
 
-echo  ---- [2/3] Loading backend image... ----
+echo  ---- [2/6] Loading backend image... ----
 if exist "docker-images\asset-backend.tar.gz" (
     docker load < docker-images\asset-backend.tar.gz
 ) else (
     echo   [Warning] asset-backend.tar.gz not found. Skipping.
 )
 
-echo  ---- [3/3] Loading PostgreSQL image... ----
+echo  ---- [3/6] Loading PostgreSQL image... ----
 if exist "docker-images\postgres-16.tar.gz" (
     docker load < docker-images\postgres-16.tar.gz
 ) else (
     echo   [Warning] postgres-16.tar.gz not found. Skipping.
+)
+
+echo  ---- [4/6] Loading Python base image... ----
+if exist "docker-images\python-3.12-slim.tar.gz" (
+    docker load < docker-images\python-3.12-slim.tar.gz
+) else (
+    echo   [Warning] python-3.12-slim.tar.gz not found. Skipping.
+)
+
+echo  ---- [5/6] Loading Node base image... ----
+if exist "docker-images\node-20-alpine.tar.gz" (
+    docker load < docker-images\node-20-alpine.tar.gz
+) else (
+    echo   [Warning] node-20-alpine.tar.gz not found. Skipping.
+)
+
+echo  ---- [6/6] Loading Nginx base image... ----
+if exist "docker-images\nginx-alpine.tar.gz" (
+    docker load < docker-images\nginx-alpine.tar.gz
+) else (
+    echo   [Warning] nginx-alpine.tar.gz not found. Skipping.
 )
 
 echo.
@@ -591,7 +635,9 @@ echo   [Done] All tables truncated.
 
 echo.
 echo  ---- Rebuilding backend image (applying latest seed.py)... ----
-docker compose build --no-pull asset-backend
+set DOCKER_BUILDKIT=0
+docker compose build asset-backend
+set DOCKER_BUILDKIT=
 if %errorlevel% neq 0 (
     echo.
     echo   [Error] Backend build failed. Check the error log above.
