@@ -20,6 +20,9 @@ frontend/dist/
 # Docker volumes
 docker/postgres-data/
 
+# Docker image exports (offline deployment, large files)
+docker-images/
+
 # IDE
 .vscode/
 .idea/
