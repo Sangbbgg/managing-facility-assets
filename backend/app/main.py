@@ -2,12 +2,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import engine, AsyncSessionLocal
-from app.core.seed import seed_location_nodes, seed_group_nodes
+from app.core.seed import seed_location_nodes, seed_group_nodes, seed_equipment_types, seed_departments
+from app.core.schema_sync import sync_schema
 from app.models import Base  # noqa: F401 — 모든 모델 등록
 from app.api.routes import (
     health, locations, groups, assets, catalogs, persons,
     reports, evtx, form_templates,
     hardware, software, custom_fields, collect, layouts,
+    admin,
 )
 
 
@@ -15,9 +17,12 @@ from app.api.routes import (
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await sync_schema(engine)
     async with AsyncSessionLocal() as session:
         await seed_location_nodes(session)
         await seed_group_nodes(session)
+        await seed_equipment_types(session)
+        await seed_departments(session)
     yield
     await engine.dispose()
 
@@ -45,3 +50,4 @@ app.include_router(software.router,       prefix="/api/assets",          tags=["
 app.include_router(custom_fields.router,  prefix="/api/assets",          tags=["custom-fields"])
 app.include_router(collect.router,        prefix="/api/collect",         tags=["collect"])
 app.include_router(layouts.router,        prefix="/api/layouts",         tags=["layouts"])
+app.include_router(admin.router,          prefix="/api/admin",           tags=["admin"])

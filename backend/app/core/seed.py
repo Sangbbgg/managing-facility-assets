@@ -123,3 +123,59 @@ async def seed_group_nodes(session: AsyncSession) -> None:
         "SELECT setval(pg_get_serial_sequence('group_nodes','id'), MAX(id)) FROM group_nodes"
     ))
     await session.commit()
+
+
+# ── equipment_types ─────────────────────────────────────────────────────────
+# id  name              code
+_EQUIPMENT_TYPES = [
+    (1, "SERVER",         "SER"),
+    (2, "PC",             "PC"),
+    (3, "Network Switch", "NW"),
+    (4, "기타",           "ETC"),
+    (5, "보안",           "SEC"),
+    (7, "Controller",     "CD"),
+]
+
+
+# ── departments ──────────────────────────────────────────────────────────────
+# id  name            code
+_DEPARTMENTS = [
+    (1, "계측제어부",   "IC"),
+    (2, "신재생운영팀", "IC"),
+]
+
+
+async def seed_equipment_types(session: AsyncSession) -> None:
+    result = await session.execute(text("SELECT COUNT(*) FROM equipment_types"))
+    if result.scalar() > 0:
+        return
+
+    await session.execute(text("""
+        INSERT INTO equipment_types (id, name, code)
+        VALUES (:id, :name, :code)
+    """), [
+        {"id": r[0], "name": r[1], "code": r[2]}
+        for r in _EQUIPMENT_TYPES
+    ])
+    await session.execute(text(
+        "SELECT setval(pg_get_serial_sequence('equipment_types','id'), MAX(id)) FROM equipment_types"
+    ))
+    await session.commit()
+
+
+async def seed_departments(session: AsyncSession) -> None:
+    result = await session.execute(text("SELECT COUNT(*) FROM departments"))
+    if result.scalar() > 0:
+        return
+
+    await session.execute(text("""
+        INSERT INTO departments (id, name, code)
+        VALUES (:id, :name, :code)
+    """), [
+        {"id": r[0], "name": r[1], "code": r[2]}
+        for r in _DEPARTMENTS
+    ])
+    await session.execute(text(
+        "SELECT setval(pg_get_serial_sequence('departments','id'), MAX(id)) FROM departments"
+    ))
+    await session.commit()

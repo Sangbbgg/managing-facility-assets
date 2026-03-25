@@ -24,5 +24,6 @@ export default createRouter({
     { path: '/settings/persons',        component: () => import('@/pages/settings/PersonPage.vue') },
     { path: '/settings/departments',    component: () => import('@/pages/settings/DepartmentPage.vue') },
     { path: '/settings/equipment-types', component: () => import('@/pages/settings/EquipmentTypePage.vue') },
+    { path: '/settings/db',              component: () => import('@/pages/settings/DbViewerPage.vue') },
   ],
 })
