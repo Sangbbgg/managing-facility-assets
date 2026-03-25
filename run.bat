@@ -410,8 +410,8 @@ goto BACK
 :: [10] Save Images  (for offline / air-gapped deployment)
 ::
 ::   What it does:
-::     - Saves 3 Docker images to ./docker-images/ as .tar.gz files
-::       (asset-frontend.tar.gz, asset-backend.tar.gz, postgres-16.tar.gz)
+::     - Saves all Docker images to ./docker-images/ as .tar files
+::       (app images + base images needed for offline rebuild)
 ::
 ::   When to use:
 ::     - Preparing deployment to an air-gapped server
@@ -430,14 +430,13 @@ echo    [10] Save Images  -  Export built images to files
 echo  ================================================================
 echo.
 echo   Output files (./docker-images/ folder):
-echo     - asset-frontend.tar.gz   (Vue 3 + Nginx)
-echo     - asset-backend.tar.gz    (FastAPI + Python)
-echo     - postgres-16.tar.gz      (PostgreSQL 16)
+echo     App images    : asset-frontend.tar, asset-backend.tar, postgres-16.tar
+echo     Base images   : python-3.12-slim.tar, node-20-alpine.tar, nginx-alpine.tar
 echo.
 echo   After saving, copy docker-images\ to the target server
 echo   and run [11] Load Images there.
 echo.
-echo   Note: Total size ~1-2GB. May take several minutes.
+echo   Note: Total size ~2-3GB (uncompressed). May take several minutes.
 echo.
 set /p confirm=  Proceed? (Y/N):
 if /i not "%confirm%"=="Y" goto BACK
@@ -446,28 +445,28 @@ if not exist "docker-images" mkdir docker-images
 
 echo.
 echo  ---- [1/6] Saving frontend image... ----
-docker save managing-facility-assets-asset-frontend | gzip > docker-images\asset-frontend.tar.gz
-if %errorlevel% neq 0 echo   [Warning] Frontend image not found or save failed.
+docker save -o docker-images\asset-frontend.tar managing-facility-assets-asset-frontend
+if %errorlevel% neq 0 (echo   [Warning] Frontend image not found or save failed.) else (echo   [OK])
 
 echo  ---- [2/6] Saving backend image... ----
-docker save managing-facility-assets-asset-backend | gzip > docker-images\asset-backend.tar.gz
-if %errorlevel% neq 0 echo   [Warning] Backend image not found or save failed.
+docker save -o docker-images\asset-backend.tar managing-facility-assets-asset-backend
+if %errorlevel% neq 0 (echo   [Warning] Backend image not found or save failed.) else (echo   [OK])
 
 echo  ---- [3/6] Saving PostgreSQL image... ----
-docker save postgres:16-alpine | gzip > docker-images\postgres-16.tar.gz
-if %errorlevel% neq 0 echo   [Warning] PostgreSQL image not found or save failed.
+docker save -o docker-images\postgres-16.tar postgres:16-alpine
+if %errorlevel% neq 0 (echo   [Warning] postgres:16-alpine not found or save failed.) else (echo   [OK])
 
-echo  ---- [4/6] Saving Python base image (offline build support)... ----
-docker save python:3.12-slim | gzip > docker-images\python-3.12-slim.tar.gz
-if %errorlevel% neq 0 echo   [Warning] python:3.12-slim not found or save failed.
+echo  ---- [4/6] Saving Python base image (for offline rebuild)... ----
+docker save -o docker-images\python-3.12-slim.tar python:3.12-slim
+if %errorlevel% neq 0 (echo   [Warning] python:3.12-slim not found or save failed.) else (echo   [OK])
 
-echo  ---- [5/6] Saving Node base image (offline build support)... ----
-docker save node:20-alpine | gzip > docker-images\node-20-alpine.tar.gz
-if %errorlevel% neq 0 echo   [Warning] node:20-alpine not found or save failed.
+echo  ---- [5/6] Saving Node base image (for offline rebuild)... ----
+docker save -o docker-images\node-20-alpine.tar node:20-alpine
+if %errorlevel% neq 0 (echo   [Warning] node:20-alpine not found or save failed.) else (echo   [OK])
 
-echo  ---- [6/6] Saving Nginx base image (offline build support)... ----
-docker save nginx:alpine | gzip > docker-images\nginx-alpine.tar.gz
-if %errorlevel% neq 0 echo   [Warning] nginx:alpine not found or save failed.
+echo  ---- [6/6] Saving Nginx base image (for offline rebuild)... ----
+docker save -o docker-images\nginx-alpine.tar nginx:alpine
+if %errorlevel% neq 0 (echo   [Warning] nginx:alpine not found or save failed.) else (echo   [OK])
 
 echo.
 echo  ---- Saved files: ----
@@ -482,11 +481,11 @@ goto BACK
 :: [11] Load Images  (for offline / air-gapped deployment)
 ::
 ::   What it does:
-::     - Loads Docker images from .tar.gz files in ./docker-images/
+::     - Loads Docker images from .tar files in ./docker-images/
 ::     - After loading, run [1] Full Deploy to start the system
 ::
 ::   Prerequisites:
-::     - docker-images\ folder with 3 .tar.gz files must exist here
+::     - docker-images\ folder with .tar files must exist here
 ::     - Docker Desktop (or Docker Engine) must be running
 ::
 ::   Steps:
@@ -502,12 +501,12 @@ echo    [11] Load Images  -  Import images from files
 echo  ================================================================
 echo.
 echo   Expected files (./docker-images/ folder):
-echo     - asset-frontend.tar.gz    (built app image)
-echo     - asset-backend.tar.gz     (built app image)
-echo     - postgres-16.tar.gz       (DB image)
-echo     - python-3.12-slim.tar.gz  (base image for offline build)
-echo     - node-20-alpine.tar.gz    (base image for offline build)
-echo     - nginx-alpine.tar.gz      (base image for offline build)
+echo     - asset-frontend.tar       (built app image)
+echo     - asset-backend.tar        (built app image)
+echo     - postgres-16.tar          (DB image)
+echo     - python-3.12-slim.tar     (base image for offline build)
+echo     - node-20-alpine.tar       (base image for offline build)
+echo     - nginx-alpine.tar         (base image for offline build)
 echo.
 echo   After loading, run [1] Full Deploy to start the system.
 echo.
@@ -525,45 +524,45 @@ if /i not "%confirm%"=="Y" goto BACK
 
 echo.
 echo  ---- [1/6] Loading frontend image... ----
-if exist "docker-images\asset-frontend.tar.gz" (
-    docker load < docker-images\asset-frontend.tar.gz
+if exist "docker-images\asset-frontend.tar" (
+    docker load -i docker-images\asset-frontend.tar
 ) else (
-    echo   [Warning] asset-frontend.tar.gz not found. Skipping.
+    echo   [Warning] asset-frontend.tar not found. Skipping.
 )
 
 echo  ---- [2/6] Loading backend image... ----
-if exist "docker-images\asset-backend.tar.gz" (
-    docker load < docker-images\asset-backend.tar.gz
+if exist "docker-images\asset-backend.tar" (
+    docker load -i docker-images\asset-backend.tar
 ) else (
-    echo   [Warning] asset-backend.tar.gz not found. Skipping.
+    echo   [Warning] asset-backend.tar not found. Skipping.
 )
 
 echo  ---- [3/6] Loading PostgreSQL image... ----
-if exist "docker-images\postgres-16.tar.gz" (
-    docker load < docker-images\postgres-16.tar.gz
+if exist "docker-images\postgres-16.tar" (
+    docker load -i docker-images\postgres-16.tar
 ) else (
-    echo   [Warning] postgres-16.tar.gz not found. Skipping.
+    echo   [Warning] postgres-16.tar not found. Skipping.
 )
 
 echo  ---- [4/6] Loading Python base image... ----
-if exist "docker-images\python-3.12-slim.tar.gz" (
-    docker load < docker-images\python-3.12-slim.tar.gz
+if exist "docker-images\python-3.12-slim.tar" (
+    docker load -i docker-images\python-3.12-slim.tar
 ) else (
-    echo   [Warning] python-3.12-slim.tar.gz not found. Skipping.
+    echo   [Warning] python-3.12-slim.tar not found. Skipping.
 )
 
 echo  ---- [5/6] Loading Node base image... ----
-if exist "docker-images\node-20-alpine.tar.gz" (
-    docker load < docker-images\node-20-alpine.tar.gz
+if exist "docker-images\node-20-alpine.tar" (
+    docker load -i docker-images\node-20-alpine.tar
 ) else (
-    echo   [Warning] node-20-alpine.tar.gz not found. Skipping.
+    echo   [Warning] node-20-alpine.tar not found. Skipping.
 )
 
 echo  ---- [6/6] Loading Nginx base image... ----
-if exist "docker-images\nginx-alpine.tar.gz" (
-    docker load < docker-images\nginx-alpine.tar.gz
+if exist "docker-images\nginx-alpine.tar" (
+    docker load -i docker-images\nginx-alpine.tar
 ) else (
-    echo   [Warning] nginx-alpine.tar.gz not found. Skipping.
+    echo   [Warning] nginx-alpine.tar not found. Skipping.
 )
 
 echo.
