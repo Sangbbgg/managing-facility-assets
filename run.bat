@@ -100,7 +100,7 @@ if /i not "%confirm%"=="Y" goto BACK
 
 echo.
 echo  ---- Step 1: Building images... ----
-docker compose build
+docker compose build --no-pull
 if %errorlevel% neq 0 (
     echo.
     echo   [Error] Build failed. Check the error log above.
@@ -159,7 +159,7 @@ if /i not "%confirm%"=="Y" goto BACK
 
 echo.
 echo  ---- Rebuilding all images... ----
-docker compose build
+docker compose build --no-pull
 echo.
 echo  ---- Restarting containers... ----
 docker compose up -d
@@ -202,7 +202,7 @@ if /i not "%confirm%"=="Y" goto BACK
 
 echo.
 echo  ---- Rebuilding backend image... ----
-docker compose build asset-backend
+docker compose build --no-pull asset-backend
 echo.
 echo  ---- Restarting backend container... ----
 docker compose up -d asset-backend
@@ -245,7 +245,7 @@ if /i not "%confirm%"=="Y" goto BACK
 
 echo.
 echo  ---- Rebuilding frontend image... ----
-docker compose build asset-frontend
+docker compose build --no-pull asset-frontend
 echo.
 echo  ---- Restarting frontend container... ----
 docker compose up -d asset-frontend
@@ -591,7 +591,7 @@ echo   [Done] All tables truncated.
 
 echo.
 echo  ---- Rebuilding backend image (applying latest seed.py)... ----
-docker compose build asset-backend
+docker compose build --no-pull asset-backend
 if %errorlevel% neq 0 (
     echo.
     echo   [Error] Backend build failed. Check the error log above.
