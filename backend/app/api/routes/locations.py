@@ -49,8 +49,9 @@ async def update_location(node_id: int, body: LocationNodeUpdate, db: AsyncSessi
         raise HTTPException(404, "위치 노드를 찾을 수 없습니다")
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(node, k, v)
-    if body.name:
-        node.full_path = await _compute_full_path(db, node.parent_id, body.name)
+    if body.name is not None or body.parent_id is not None:
+        node.full_path = await _compute_full_path(db, node.parent_id, node.name)
+        node.depth = await _compute_depth(db, node.parent_id)
     await db.flush()
     await db.refresh(node)
     return node

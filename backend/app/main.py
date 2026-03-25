@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.database import engine
+from app.core.database import engine, AsyncSessionLocal
+from app.core.seed import seed_location_nodes, seed_group_nodes
 from app.models import Base  # noqa: F401 — 모든 모델 등록
 from app.api.routes import (
     health, locations, groups, assets, catalogs, persons,
@@ -14,6 +15,9 @@ from app.api.routes import (
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    async with AsyncSessionLocal() as session:
+        await seed_location_nodes(session)
+        await seed_group_nodes(session)
     yield
     await engine.dispose()
 

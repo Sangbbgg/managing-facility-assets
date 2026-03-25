@@ -13,6 +13,7 @@ class LocationNodeCreate(LocationNodeBase):
 
 class LocationNodeUpdate(BaseModel):
     name: Optional[str] = None
+    parent_id: Optional[int] = None
 
 class LocationNodeRead(LocationNodeBase):
     id: int

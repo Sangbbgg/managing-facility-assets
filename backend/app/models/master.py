@@ -26,7 +26,7 @@ class GroupNode(Base):
     full_path: Mapped[str] = mapped_column(String(500))
     depth: Mapped[int] = mapped_column(Integer, default=0)
     parent: Mapped[Optional[GroupNode]] = relationship("GroupNode", remote_side="GroupNode.id", back_populates="children")
-    children: Mapped[list[GroupNode]] = relationship("GroupNode", back_populates="parent")
+    children: Mapped[list[GroupNode]] = relationship("GroupNode", back_populates="parent", cascade="all, delete-orphan", passive_deletes=True)
 
 
 class EquipmentType(Base):
