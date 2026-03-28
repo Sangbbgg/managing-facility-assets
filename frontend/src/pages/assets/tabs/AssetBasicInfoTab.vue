@@ -19,22 +19,13 @@
       <n-form-item label="시리얼번호">
         <n-input v-model:value="form.serial_number" />
       </n-form-item>
-      <n-form-item label="IP주소">
-        <n-input v-model:value="form.ip_address" />
-      </n-form-item>
       <n-form-item label="상태">
         <n-select v-model:value="form.status" :options="statusOptions" />
       </n-form-item>
-      <n-form-item label="OS">
-        <n-select v-model:value="form.os_id" :options="osOptions" clearable />
-      </n-form-item>
-      <n-form-item label="백신">
-        <n-select v-model:value="form.av_id" :options="avOptions" clearable />
-      </n-form-item>
-      <n-form-item label="담당자">
+      <n-form-item label="담당자(정)">
         <n-select v-model:value="form.manager_id" :options="personOptions" clearable />
       </n-form-item>
-      <n-form-item label="관리감독자">
+      <n-form-item label="담당자(부)">
         <n-select v-model:value="form.supervisor_id" :options="personOptions" clearable />
       </n-form-item>
       <n-form-item label="중요도">
@@ -58,14 +49,12 @@
 import { ref, watch, computed, onMounted } from 'vue'
 import { useMessage } from 'naive-ui'
 import { useAssetStore } from '@/stores/assetStore'
-import { useCatalogStore } from '@/stores/catalogStore'
 import { usePersonStore } from '@/stores/personStore'
 
 const props = defineProps({ asset: { type: Object, required: true } })
 const emit  = defineEmits(['updated'])
 const message     = useMessage()
 const assetStore  = useAssetStore()
-const catalogStore = useCatalogStore()
 const personStore  = usePersonStore()
 
 const saving = ref(false)
@@ -73,7 +62,7 @@ const installDateMs = ref(null)
 
 const form = ref({
   asset_name: '', purpose: '', model_name: '', serial_number: '',
-  ip_address: '', status: 'OPERATING', os_id: null, av_id: null,
+  status: 'OPERATING',
   manager_id: null, supervisor_id: null, importance: '중',
 })
 
@@ -83,8 +72,6 @@ const statusOptions = [
   { label: '장애',   value: 'FAULTY' },
   { label: '폐기',   value: 'DISPOSED' },
 ]
-const osOptions      = computed(() => catalogStore.osList.map(o => ({ label: o.name, value: o.id })))
-const avOptions      = computed(() => catalogStore.avList.map(a  => ({ label: a.name, value: a.id })))
 const personOptions  = computed(() => personStore.list.map(p => ({ label: p.name, value: p.id })))
 
 watch(() => props.asset, (a) => {
@@ -113,8 +100,6 @@ async function save() {
 }
 
 onMounted(() => {
-  catalogStore.fetchOs()
-  catalogStore.fetchAv()
   personStore.fetchList()
 })
 </script>
