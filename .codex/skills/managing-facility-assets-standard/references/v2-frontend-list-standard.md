@@ -8,6 +8,7 @@ Every frontend UI area that renders list-shaped data must show:
 
 - a visible section header or title
 - the total number of items currently shown
+- full visible values without `...` truncation for user-facing list data unless the user explicitly requests compact mode
 
 ## Applies To
 
@@ -22,6 +23,7 @@ Every frontend UI area that renders list-shaped data must show:
 - When using `DataTable.vue`, pass a specific `title` prop instead of relying on the generic default.
 - If the list is filtered, show the count of the currently displayed items.
 - If a page contains multiple list sections, each section should display its own count.
+- Prefer wrapping long text over truncating it with ellipsis.
 
 ## Intent
 

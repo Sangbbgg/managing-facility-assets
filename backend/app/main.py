@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import settings
 from app.core.database import engine, AsyncSessionLocal
 from app.core.seed import reset_and_seed_defaults
 from app.core.schema_sync import sync_schema
@@ -18,8 +19,9 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     await sync_schema(engine)
-    async with AsyncSessionLocal() as session:
-        await reset_and_seed_defaults(session)
+    if settings.RESET_AND_SEED_ON_STARTUP:
+        async with AsyncSessionLocal() as session:
+            await reset_and_seed_defaults(session)
     yield
     await engine.dispose()
 

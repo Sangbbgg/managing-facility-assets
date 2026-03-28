@@ -209,6 +209,19 @@ function reorderColumns(fromKey, toKey) {
   activeColumns.value = cols
 }
 
+function estimateColumnWidth(column) {
+  const headerWidth = String(column.label ?? '').length * 14 + 48
+  let contentWidth = 0
+
+  for (const row of filteredAssets.value) {
+    const value = row[column.key]
+    const text = value == null || value === '' ? '-' : String(value)
+    contentWidth = Math.max(contentWidth, text.length * 8 + 32)
+  }
+
+  return Math.min(Math.max(column.width ?? 150, headerWidth, contentWidth), 720)
+}
+
 // ── 테이블 컬럼 ───────────────────────────────────────────────
 const tableColumns = computed(() => {
   // 반응성 트래킹: drag 상태 변화 시 재계산
@@ -219,12 +232,11 @@ const tableColumns = computed(() => {
     .filter(c => c.visible)
     .map(c => {
       const isDropTarget = _dropKey === c.key && _dragKey !== c.key
+      const computedWidth = estimateColumnWidth(c)
 
       return {
         key:      c.key,
-        width:    c.width,
-        ellipsis: { tooltip: true },
-
+        width:    computedWidth,
         // 드래그 가능한 커스텀 헤더
         title: () => h(
           'div',
@@ -241,6 +253,7 @@ const tableColumns = computed(() => {
               borderLeft:     isDropTarget ? '3px solid #4098fc' : '3px solid transparent',
               opacity:        _dragKey === c.key ? 0.45 : 1,
               transition:     'border-color 0.1s, opacity 0.1s',
+              whiteSpace:     'nowrap',
             },
             onDragstart: (e) => {
               e.dataTransfer.effectAllowed = 'move'
@@ -269,7 +282,7 @@ const tableColumns = computed(() => {
           },
           [
             h('span', { style: 'color:#bbb; font-size:11px; flex-shrink:0;' }, '⠿'),
-            h('span', c.label),
+            h('span', { style: 'white-space: nowrap; overflow: visible; text-overflow: clip;' }, c.label),
           ]
         ),
 
@@ -282,16 +295,24 @@ const tableColumns = computed(() => {
               size: 'small',
             }, { default: () => STATUS_LABELS[val] ?? val ?? '-' })
           }
-          return val != null && val !== '' ? val : '-'
+          return h(
+            'div',
+            {
+              style: {
+                whiteSpace: 'nowrap',
+                overflow: 'visible',
+                textOverflow: 'clip',
+              },
+            },
+            val != null && val !== '' ? String(val) : '-'
+          )
         },
       }
     })
 })
 
 const scrollX = computed(() =>
-  activeColumns.value
-    .filter(c => c.visible)
-    .reduce((sum, c) => sum + (c.width ?? 150), 0)
+  tableColumns.value.reduce((sum, c) => sum + (c.width ?? 150), 0)
 )
 
 // 창 높이 반응형 — 툴바·헤더·여백 합산 약 200px
