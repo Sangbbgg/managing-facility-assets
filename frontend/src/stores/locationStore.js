@@ -13,19 +13,18 @@ export const useLocationStore = defineStore('location', () => {
   }
 
   async function create(body) {
-    const item = await locationsApi.create(body)
-    list.value.push(item)
+    await locationsApi.create(body)
+    await fetchList()
   }
 
   async function update(id, body) {
-    const item = await locationsApi.update(id, body)
-    const idx = list.value.findIndex(n => n.id === id)
-    if (idx !== -1) list.value[idx] = item
+    await locationsApi.update(id, body)
+    await fetchList()
   }
 
   async function remove(id) {
     await locationsApi.remove(id)
-    list.value = list.value.filter(n => n.id !== id)
+    await fetchList()
   }
 
   return { list, loading, fetchList, create, update, remove }

@@ -1,6 +1,8 @@
 """
-초기 seed 데이터 — DB가 비어있을 때만 삽입됩니다.
-각 테이블에 데이터가 1건 이상 있으면 해당 테이블은 건너뜁니다.
+Default seed helpers.
+
+The current DB is reset before seed data is inserted so startup always returns
+the seeded master-data state.
 """
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -83,10 +85,10 @@ _GROUP_NODES = [
     (11, "2단계 DCS",       "BR2",   5,  "신인천빛드림본부 > 발전제어 > 2단계 > 2단계 DCS",                         3),
     # depth 4 — 1CC 하위
     (12, "1ST",             "ST1",   6,  "신인천빛드림본부 > 발전제어 > 1단계 > 1CC > 1ST",                         4),
-    (13, "GT",              "GT1",   6,  "신인천빛드림본부 > 발전제어 > 1단계 > 1CC > 1~2GT",                           4),
+    (13, "1~2GT",              "GT1",   6,  "신인천빛드림본부 > 발전제어 > 1단계 > 1CC > 1~2GT",                           4),
     # depth 4 — 2CC 하위
     (14, "2ST",             "ST2",   7,  "신인천빛드림본부 > 발전제어 > 1단계 > 2CC > 2ST",                         4),
-    (15, "GT",              "GT2",   7,  "신인천빛드림본부 > 발전제어 > 1단계 > 2CC > 3~4GT",                           4),
+    (15, "3~4GT",              "GT2",   7,  "신인천빛드림본부 > 발전제어 > 1단계 > 2CC > 3~4GT",                           4),
     # depth 4 — 3CC 하위
     (17, "3ST",             "ST3",   9,  "신인천빛드림본부 > 발전제어 > 2단계 > 3CC > 3ST",                          4),
     (18, "5~6GT",           "GT3",   9,  "신인천빛드림본부 > 발전제어 > 2단계 > 3CC > 5~6GT",                        4),
@@ -102,6 +104,22 @@ _GROUP_NODES = [
     # depth 4 — 4CC 하위
     (24, "4EG",             "EG4",  10,  "신인천빛드림본부 > 발전제어 > 2단계 > 4CC > 4EG",                          4),
 ]
+
+
+_SEED_ROOT_TABLES = (
+    "location_nodes",
+    "group_nodes",
+    "equipment_types",
+    "departments",
+)
+
+
+async def reset_seeded_db(session: AsyncSession) -> None:
+    quoted_tables = ", ".join(f'"{table_name}"' for table_name in _SEED_ROOT_TABLES)
+    await session.execute(
+        text(f"TRUNCATE TABLE {quoted_tables} RESTART IDENTITY CASCADE")
+    )
+    await session.commit()
 
 
 async def seed_location_nodes(session: AsyncSession) -> None:
@@ -195,3 +213,11 @@ async def seed_departments(session: AsyncSession) -> None:
         "SELECT setval(pg_get_serial_sequence('departments','id'), MAX(id)) FROM departments"
     ))
     await session.commit()
+
+
+async def reset_and_seed_defaults(session: AsyncSession) -> None:
+    await reset_seeded_db(session)
+    await seed_location_nodes(session)
+    await seed_group_nodes(session)
+    await seed_equipment_types(session)
+    await seed_departments(session)

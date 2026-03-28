@@ -8,9 +8,8 @@
         :on-update="handleUpdate"
         :on-delete="store.remove"
         :new-child-row="() => ({ code: '' })"
-        :render-label="({ option: o }) => o._raw.code
-          ? h('span', [o._raw.name, ' ', h('span', { style: 'color:#18a058;font-weight:700;font-size:0.85em' }, `(${o._raw.code})`)])
-          : o._raw.name"
+        :get-label="formatGroupLabel"
+        :render-label="renderGroupLabel"
       >
         <!-- 상단 추가 폼: 코드 입력 -->
         <template #extra-fields="{ form }">
@@ -41,6 +40,20 @@ const store = useGroupStore()
 
 async function handleAdd(body)         { await store.create(body) }
 async function handleUpdate(id, body)  { await store.update(id, body) }
+
+function formatGroupLabel(node) {
+  return node.code ? `${node.name} (${node.code})` : node.name
+}
+
+function renderGroupLabel({ option }) {
+  return option._raw.code
+    ? h('span', [
+        option._raw.name,
+        ' ',
+        h('span', { style: 'color:#18a058;font-weight:700;font-size:0.85em' }, `(${option._raw.code})`),
+      ])
+    : option._raw.name
+}
 
 onMounted(() => store.fetchList())
 </script>

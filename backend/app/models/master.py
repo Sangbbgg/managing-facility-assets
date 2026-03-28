@@ -14,7 +14,12 @@ class LocationNode(Base):
     full_path: Mapped[str] = mapped_column(String(500))
     depth: Mapped[int] = mapped_column(Integer, default=0)
     parent: Mapped[Optional[LocationNode]] = relationship("LocationNode", remote_side="LocationNode.id", back_populates="children")
-    children: Mapped[list[LocationNode]] = relationship("LocationNode", back_populates="parent")
+    children: Mapped[list[LocationNode]] = relationship(
+        "LocationNode",
+        back_populates="parent",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class GroupNode(Base):

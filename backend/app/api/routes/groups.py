@@ -26,6 +26,37 @@ async def _compute_depth(db: AsyncSession, parent_id: int | None) -> int:
     return (parent.depth + 1) if parent else 0
 
 
+async def _validate_parent(db: AsyncSession, node_id: int, parent_id: int | None) -> None:
+    if parent_id is None:
+        return
+    if parent_id == node_id:
+        raise HTTPException(400, "자기 자신을 상위 그룹으로 지정할 수 없습니다")
+    descendant_ids = await _get_descendant_ids(db, node_id)
+    if parent_id in descendant_ids:
+        raise HTTPException(400, "하위 그룹 아래로 이동할 수 없습니다")
+
+
+async def _refresh_subtree_paths(db: AsyncSession, root_id: int) -> None:
+    result = await db.execute(select(GroupNode).order_by(GroupNode.depth, GroupNode.id))
+    nodes = result.scalars().all()
+    by_id = {node.id: node for node in nodes}
+    by_parent: dict[int | None, list[GroupNode]] = {}
+    for node in nodes:
+        by_parent.setdefault(node.parent_id, []).append(node)
+
+    root = by_id.get(root_id)
+    if not root:
+        return
+
+    def _apply(parent: GroupNode) -> None:
+        for child in by_parent.get(parent.id, []):
+            child.full_path = f"{parent.full_path} > {child.name}"
+            child.depth = parent.depth + 1
+            _apply(child)
+
+    _apply(root)
+
+
 @router.get("", response_model=list[GroupNodeRead])
 async def get_groups(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(GroupNode).order_by(GroupNode.depth, GroupNode.id))
@@ -63,13 +94,21 @@ async def update_group(node_id: int, body: GroupNodeUpdate, db: AsyncSession = D
     if not node:
         raise HTTPException(404, "그룹 노드를 찾을 수 없습니다")
     data = body.model_dump(exclude_unset=True)
+    if 'parent_id' in data:
+        await _validate_parent(db, node_id, data['parent_id'])
     if 'code' in data:
-        data['code'] = data['code'] or None  # 빈 문자열 → NULL
+        data['code'] = data['code'] or None
     for k, v in data.items():
         setattr(node, k, v)
-    if body.name:
-        node.full_path = await _compute_full_path(db, node.parent_id, body.name)
-    await db.flush()
+    if 'name' in data or 'parent_id' in data:
+        node.full_path = await _compute_full_path(db, node.parent_id, node.name)
+        node.depth = await _compute_depth(db, node.parent_id)
+        await _refresh_subtree_paths(db, node.id)
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(409, f"그룹 코드 '{data.get('code')}'는 이미 사용 중입니다")
     await db.refresh(node)
     return node
 

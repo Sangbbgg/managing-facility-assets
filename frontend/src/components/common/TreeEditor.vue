@@ -19,9 +19,10 @@
       :node-props="nodeProps"
       :render-suffix="renderSuffix"
       :render-label="renderLabel ?? undefined"
-      :default-expanded-keys="allKeys"
+      :expanded-keys="expandedKeys"
       block-line
       expand-on-click
+      @update:expanded-keys="expandedKeys = $event"
     />
 
     <!-- 수정 모달 -->
@@ -104,7 +105,7 @@
 </template>
 
 <script setup>
-import { ref, computed, h, nextTick } from 'vue'
+import { ref, computed, h, nextTick, watch } from 'vue'
 import { NButton, NSpace, useMessage } from 'naive-ui'
 import ConfirmModal from './ConfirmModal.vue'
 
@@ -134,6 +135,7 @@ const addChildParentId    = ref(null)
 const addChildParentLabel = ref('')
 const addChildLoading     = ref(false)
 const inputRefs           = ref([])
+const expandedKeys        = ref([])
 
 function setInputRef(el, idx) {
   if (el) inputRefs.value[idx] = el
@@ -161,8 +163,12 @@ function onRowEnter(idx) {
   }
 }
 
+function getNodeLabel(node) {
+  return props.getLabel ? props.getLabel(node) : node.name
+}
+
 const parentOptions = computed(() =>
-  props.nodes.map(n => ({ label: n.full_path || n.name, value: n.id }))
+  props.nodes.map(n => ({ label: n.full_path || getNodeLabel(n), value: n.id }))
 )
 
 function buildTree(nodes, parentId = null) {
@@ -170,13 +176,18 @@ function buildTree(nodes, parentId = null) {
     .filter(n => (n.parent_id ?? null) === parentId)
     .map(n => ({
       key: n.id,
-      label: n.name,
+      label: getNodeLabel(n),
       _raw: n,
       children: buildTree(nodes, n.id),
     }))
 }
 const treeData = computed(() => buildTree(props.nodes))
-const allKeys  = computed(() => props.nodes.map(n => n.id))
+
+watch(
+  () => props.nodes.map(n => n.id),
+  (ids) => { expandedKeys.value = [...ids] },
+  { immediate: true },
+)
 
 function nodeProps({ option }) {
   return { onContextmenu(e) { e.preventDefault() } }
@@ -191,7 +202,7 @@ function renderSuffix({ option }) {
           e.stopPropagation()
           addChildList.value = [{ name: '', ...props.newChildRow() }]
           addChildParentId.value = option._raw.id
-          addChildParentLabel.value = option._raw.full_path || option._raw.name
+          addChildParentLabel.value = option._raw.full_path || getNodeLabel(option._raw)
           addChildModal.value = true
           nextTick(() => { if (inputRefs.value[0]?.focus) inputRefs.value[0].focus() })
         },

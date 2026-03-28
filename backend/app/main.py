@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import engine, AsyncSessionLocal
-from app.core.seed import seed_location_nodes, seed_group_nodes, seed_equipment_types, seed_departments
+from app.core.seed import reset_and_seed_defaults
 from app.core.schema_sync import sync_schema
 from app.models import Base  # noqa: F401 — 모든 모델 등록
 from app.api.routes import (
@@ -19,10 +19,7 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     await sync_schema(engine)
     async with AsyncSessionLocal() as session:
-        await seed_location_nodes(session)
-        await seed_group_nodes(session)
-        await seed_equipment_types(session)
-        await seed_departments(session)
+        await reset_and_seed_defaults(session)
     yield
     await engine.dispose()
 

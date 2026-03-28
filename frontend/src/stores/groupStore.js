@@ -18,19 +18,21 @@ export const useGroupStore = defineStore('group', () => {
   }
 
   async function create(body) {
-    const item = await groupsApi.create(body)
-    list.value.push(item)
+    await groupsApi.create(body)
+    await fetchList()
+    await fetchCodeable()
   }
 
   async function update(id, body) {
-    const item = await groupsApi.update(id, body)
-    const idx = list.value.findIndex(n => n.id === id)
-    if (idx !== -1) list.value[idx] = item
+    await groupsApi.update(id, body)
+    await fetchList()
+    await fetchCodeable()
   }
 
   async function remove(id) {
     await groupsApi.remove(id)
-    list.value = list.value.filter(n => n.id !== id)
+    await fetchList()
+    await fetchCodeable()
   }
 
   return { list, codeable, loading, fetchList, fetchCodeable, create, update, remove }

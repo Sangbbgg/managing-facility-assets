@@ -33,6 +33,7 @@ class GroupNodeCreate(GroupNodeBase):
 
 class GroupNodeUpdate(BaseModel):
     name: Optional[str] = None
+    parent_id: Optional[int] = None
     code: Optional[str] = None
 
 class GroupNodeRead(GroupNodeBase):
