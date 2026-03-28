@@ -2,6 +2,7 @@
   <PageShell title="자산 등록">
     <!-- 등록된 자산 간소 목록 -->
     <n-card title="등록된 자산 목록" style="margin-bottom:16px;">
+      <ListHeader title="등록된 자산 목록" :count="assetStore.list.length" />
       <div style="max-height:220px; overflow-y:auto; border:1px solid var(--n-border-color, #e0e0e6); border-radius:3px;">
         <n-data-table
           :columns="listColumns"
@@ -143,6 +144,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useMessage } from 'naive-ui'
 import PageShell from '@/components/common/PageShell.vue'
+import ListHeader from '@/components/common/ListHeader.vue'
 import AssetCodePreview from '@/components/assets/AssetCodePreview.vue'
 import { useAssetStore } from '@/stores/assetStore'
 import { useGroupStore } from '@/stores/groupStore'

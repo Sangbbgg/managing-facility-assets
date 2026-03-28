@@ -56,5 +56,6 @@ Use this skill as the repository-specific source of truth for Codex work on this
 
 - v1 baseline: `references/v1-baseline.md`
 - Versioning rules: `references/versioning-rules.md`
+- v2 frontend list standard: `references/v2-frontend-list-standard.md`
 
 Load those references only as needed.

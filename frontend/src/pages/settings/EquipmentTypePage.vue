@@ -16,7 +16,7 @@
     </n-card>
 
     <n-card>
-      <DataTable :columns="columns" :data="list" :loading="loading" />
+      <DataTable title="장비 종류 목록" :columns="columns" :data="list" :loading="loading" />
     </n-card>
 
     <n-modal v-model:show="editModal" preset="dialog" title="장비 종류 수정">

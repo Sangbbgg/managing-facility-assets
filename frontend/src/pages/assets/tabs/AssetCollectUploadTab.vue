@@ -4,6 +4,7 @@
       <!-- 수집 스크립트 목록 -->
       <n-card title="수집 스크립트" size="small">
         <n-spin :show="scriptsLoading">
+          <ListHeader title="수집 스크립트 목록" :count="scripts.length" />
           <n-space wrap>
             <n-button
               v-for="s in scripts"
@@ -73,6 +74,7 @@
 import { ref, onMounted } from 'vue'
 import { useMessage } from 'naive-ui'
 import { collectApi } from '@/api/collectApi'
+import ListHeader from '@/components/common/ListHeader.vue'
 
 const props = defineProps({ assetId: { type: Number, required: true } })
 const emit  = defineEmits(['collected'])

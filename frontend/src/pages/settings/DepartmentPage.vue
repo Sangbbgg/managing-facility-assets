@@ -13,7 +13,7 @@
     </n-card>
 
     <n-card>
-      <DataTable :columns="columns" :data="store.deptList" :loading="store.loading" />
+      <DataTable title="부서 목록" :columns="columns" :data="store.deptList" :loading="store.loading" />
     </n-card>
 
     <n-modal v-model:show="editModal" preset="dialog" title="부서 수정">

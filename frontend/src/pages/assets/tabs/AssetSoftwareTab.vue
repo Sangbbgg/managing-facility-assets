@@ -4,18 +4,21 @@
       <n-tabs type="line" size="small">
         <!-- 설치 프로그램 -->
         <n-tab-pane name="products" tab="설치 프로그램">
+          <ListHeader title="설치 프로그램 목록" :count="(swStore.all.products || []).length" />
           <n-data-table :columns="productCols" :data="swStore.all.products || []" size="small" :max-height="350"
             :pagination="{ pageSize: 20 }" />
         </n-tab-pane>
 
         <!-- 핫픽스 -->
         <n-tab-pane name="hotfixes" tab="핫픽스/패치">
+          <ListHeader title="핫픽스 목록" :count="(swStore.all.hotfixes || []).length" />
           <n-data-table :columns="hotfixCols" :data="swStore.all.hotfixes || []" size="small" :max-height="350"
             :pagination="{ pageSize: 20 }" />
         </n-tab-pane>
 
         <!-- 프로세스 스냅샷 -->
         <n-tab-pane name="processes" tab="프로세스 스냅샷">
+          <ListHeader title="프로세스 목록" :count="(swStore.all.processes || []).length" />
           <n-data-table :columns="processCols" :data="swStore.all.processes || []" size="small" :max-height="350"
             :pagination="{ pageSize: 20 }" />
         </n-tab-pane>
@@ -33,6 +36,7 @@
 <script setup>
 import { computed, watch } from 'vue'
 import { useAssetSwStore } from '@/stores/assetSwStore'
+import ListHeader from '@/components/common/ListHeader.vue'
 
 const props  = defineProps({ assetId: { type: Number, required: true } })
 const swStore = useAssetSwStore()

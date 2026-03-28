@@ -19,7 +19,7 @@
     </n-card>
 
     <n-card>
-      <DataTable :columns="columns" :data="store.personList" :loading="store.loading" />
+      <DataTable title="담당자 목록" :columns="columns" :data="store.personList" :loading="store.loading" />
     </n-card>
 
     <n-modal v-model:show="editModal" preset="dialog" title="담당자 수정">

@@ -9,6 +9,7 @@
           clearable
           size="small"
         />
+        <ListHeader title="자산 목록" :count="filteredList.length" />
         <n-scrollbar style="flex:1;">
           <div
             v-for="a in filteredList"
@@ -73,6 +74,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import PageShell from '@/components/common/PageShell.vue'
+import ListHeader from '@/components/common/ListHeader.vue'
 import AssetBasicInfoTab    from './tabs/AssetBasicInfoTab.vue'
 import AssetHardwareTab     from './tabs/AssetHardwareTab.vue'
 import AssetSoftwareTab     from './tabs/AssetSoftwareTab.vue'

@@ -17,4 +17,4 @@ from app.models.record import (
     SealRecord, PasswordRecord,
 )
 from app.models.form_template import ReportFormTemplate, ReportFormMapping  # v3
-from app.models.report import ReportJob
+from app.models.report import ReportTemplate

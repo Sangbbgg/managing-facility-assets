@@ -44,6 +44,7 @@
         <div style="margin:12px 0; display:flex; justify-content:flex-end;">
           <n-button type="primary" @click="openCreate">+ 새 서식</n-button>
         </div>
+        <ListHeader title="서식 목록" :count="templates.length" />
         <n-data-table
           :columns="tableColumns"
           :data="templates"
@@ -197,6 +198,7 @@
 import { ref, computed, h, onMounted } from 'vue'
 import { NButton, useMessage, useDialog } from 'naive-ui'
 import PageShell from '@/components/common/PageShell.vue'
+import ListHeader from '@/components/common/ListHeader.vue'
 import { reportsApi } from '@/api/reportsApi'
 
 const message = useMessage()

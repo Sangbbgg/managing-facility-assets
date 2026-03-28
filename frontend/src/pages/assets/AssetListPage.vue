@@ -51,6 +51,7 @@
     <n-text depth="3" style="font-size:11px; display:block; margin-bottom:6px;">
       💡 컬럼 헤더를 드래그하여 순서를 변경할 수 있습니다
     </n-text>
+    <ListHeader title="자산 목록" :count="filteredAssets.length" />
 
     <!-- 스크롤 래퍼 (세로 네이티브) -->
     <div :style="{ overflowY: 'auto', maxHeight: tableMaxHeight + 'px' }">
@@ -82,6 +83,7 @@ import { ref, computed, onMounted, h, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { NTag } from 'naive-ui'
 import PageShell from '@/components/common/PageShell.vue'
+import ListHeader from '@/components/common/ListHeader.vue'
 import LayoutSelector from '@/components/assets/LayoutSelector.vue'
 import ColumnConfigPopover from '@/components/assets/ColumnConfigPopover.vue'
 import client from '@/api/client'

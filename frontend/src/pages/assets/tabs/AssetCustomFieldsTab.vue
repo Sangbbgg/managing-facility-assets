@@ -1,6 +1,7 @@
 <template>
   <div>
     <n-space vertical>
+      <ListHeader title="사용자 메모 목록" :count="fields.length" />
       <!-- 기존 메모 목록 -->
       <div v-for="field in fields" :key="field.id" style="display:flex; gap:8px; align-items:center;">
         <n-input
@@ -37,6 +38,7 @@
 import { ref, watch } from 'vue'
 import { useMessage } from 'naive-ui'
 import { customFieldsApi } from '@/api/customFieldsApi'
+import ListHeader from '@/components/common/ListHeader.vue'
 
 const props = defineProps({ assetId: { type: Number, required: true } })
 const message = useMessage()

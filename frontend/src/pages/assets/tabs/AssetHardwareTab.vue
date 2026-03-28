@@ -4,31 +4,37 @@
       <n-collapse v-if="hasData" accordion>
         <!-- 시스템 -->
         <n-collapse-item title="시스템 정보" name="systems">
+          <ListHeader title="시스템 정보" :count="(hwStore.all.systems || []).length" />
           <n-data-table :columns="sysCols" :data="hwStore.all.systems || []" size="small" :max-height="220" />
         </n-collapse-item>
 
         <!-- CPU -->
         <n-collapse-item title="CPU 정보" name="cpus">
+          <ListHeader title="CPU 정보" :count="(hwStore.all.cpus || []).length" />
           <n-data-table :columns="cpuCols" :data="hwStore.all.cpus || []" size="small" :max-height="220" />
         </n-collapse-item>
 
         <!-- 메모리 -->
         <n-collapse-item title="메모리 정보" name="memories">
+          <ListHeader title="메모리 정보" :count="(hwStore.all.memories || []).length" />
           <n-data-table :columns="memCols" :data="hwStore.all.memories || []" size="small" :max-height="220" />
         </n-collapse-item>
 
         <!-- 디스크 -->
         <n-collapse-item title="디스크 정보" name="disks">
+          <ListHeader title="디스크 정보" :count="(hwStore.all.disks || []).length" />
           <n-data-table :columns="diskCols" :data="hwStore.all.disks || []" size="small" :max-height="220" />
         </n-collapse-item>
 
         <!-- GPU -->
         <n-collapse-item title="GPU 정보" name="gpus">
+          <ListHeader title="GPU 정보" :count="(hwStore.all.gpus || []).length" />
           <n-data-table :columns="gpuCols" :data="hwStore.all.gpus || []" size="small" :max-height="220" />
         </n-collapse-item>
 
         <!-- NIC -->
         <n-collapse-item title="네트워크 어댑터" name="nics">
+          <ListHeader title="네트워크 어댑터" :count="(hwStore.all.nics || []).length" />
           <n-data-table :columns="nicCols" :data="hwStore.all.nics || []" size="small" :max-height="220" />
         </n-collapse-item>
       </n-collapse>
@@ -41,6 +47,7 @@
 <script setup>
 import { computed, onMounted, watch } from 'vue'
 import { useAssetHwStore } from '@/stores/assetHwStore'
+import ListHeader from '@/components/common/ListHeader.vue'
 
 const props  = defineProps({ assetId: { type: Number, required: true } })
 const hwStore = useAssetHwStore()

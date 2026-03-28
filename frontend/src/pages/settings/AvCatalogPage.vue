@@ -16,7 +16,7 @@
     </n-card>
 
     <n-card>
-      <DataTable :columns="columns" :data="store.avList" :loading="store.loading" />
+      <DataTable title="백신 목록" :columns="columns" :data="store.avList" :loading="store.loading" />
     </n-card>
 
     <n-modal v-model:show="editModal" preset="dialog" title="백신 수정">

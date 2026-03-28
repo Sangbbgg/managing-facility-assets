@@ -1,5 +1,6 @@
 <template>
   <div>
+    <ListHeader title="변경 이력" :count="logs.length" />
     <n-data-table
       :columns="columns"
       :data="logs"
@@ -15,6 +16,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import client from '@/api/client'
+import ListHeader from '@/components/common/ListHeader.vue'
 
 const props = defineProps({ assetId: { type: Number, required: true } })
 

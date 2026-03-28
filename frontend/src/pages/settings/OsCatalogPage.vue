@@ -16,7 +16,7 @@
     </n-card>
 
     <n-card>
-      <DataTable :columns="columns" :data="store.osList" :loading="store.loading" />
+      <DataTable title="OS 목록" :columns="columns" :data="store.osList" :loading="store.loading" />
     </n-card>
 
     <n-modal v-model:show="editModal" preset="dialog" title="OS 수정">
