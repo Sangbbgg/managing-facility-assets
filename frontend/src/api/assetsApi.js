@@ -7,6 +7,8 @@ export const assetsApi = {
   update:      (id, body)     => client.patch(`/api/assets/${id}`, body).then(r => r.data),
   remove:      (id)           => client.delete(`/api/assets/${id}`),
   // v2 확장
+  detailList:  () =>
+    client.get('/api/assets/detail-list').then(r => r.data),
   previewCode: (groupId, typeId) =>
     client.get('/api/assets/preview-code', { params: { group_id: groupId, type_id: typeId } }).then(r => r.data),
   bulkTemplate: () =>

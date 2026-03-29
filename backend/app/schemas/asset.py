@@ -1,6 +1,7 @@
-from pydantic import BaseModel
-from typing import Optional
 from datetime import date, datetime
+from typing import Optional
+
+from pydantic import BaseModel
 
 
 class AssetCreate(BaseModel):
@@ -17,7 +18,6 @@ class AssetCreate(BaseModel):
     os_id: Optional[int] = None
     av_id: Optional[int] = None
     manager_id: Optional[int] = None
-    supervisor_id: Optional[int] = None
     status: str = "OPERATING"
 
 
@@ -35,7 +35,6 @@ class AssetUpdate(BaseModel):
     os_id: Optional[int] = None
     av_id: Optional[int] = None
     manager_id: Optional[int] = None
-    supervisor_id: Optional[int] = None
     status: Optional[str] = None
 
 
@@ -59,6 +58,34 @@ class AssetRead(BaseModel):
     os_id: Optional[int] = None
     av_id: Optional[int] = None
     manager_id: Optional[int] = None
-    supervisor_id: Optional[int] = None
     last_collected_at: Optional[datetime] = None
+
     model_config = {"from_attributes": True}
+
+
+class AssetDetailListItem(BaseModel):
+    id: int
+    asset_code: str
+    asset_name: str
+    purpose: Optional[str] = None
+    model_name: Optional[str] = None
+    serial_number: Optional[str] = None
+    importance: Optional[str] = None
+    install_date: Optional[date] = None
+    status: Optional[str] = None
+    last_collected_at: Optional[datetime] = None
+    group_id: Optional[int] = None
+    group_name: Optional[str] = None
+    group_full_path: Optional[str] = None
+    group_code: Optional[str] = None
+    group_display_code: Optional[str] = None
+    location_id: Optional[int] = None
+    location_name: Optional[str] = None
+    location_full_path: Optional[str] = None
+    equipment_type_id: Optional[int] = None
+    equipment_type_name: Optional[str] = None
+    equipment_type_code: Optional[str] = None
+    manager_id: Optional[int] = None
+    manager_name: Optional[str] = None
+    resolved_manager_id: Optional[int] = None
+    resolved_manager_name: Optional[str] = None

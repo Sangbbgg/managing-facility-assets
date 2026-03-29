@@ -1,7 +1,7 @@
 from app.core.database import Base
 from app.models.master import (
     LocationNode, GroupNode, EquipmentType,
-    OsCatalog, AntivirusCatalog, Department, Person,
+    OsCatalog, AntivirusCatalog, Department, Person, PersonGroupRole,
 )
 from app.models.asset import Asset, AssetCodeSequence, AssetChangeLog
 from app.models.hw_info import (

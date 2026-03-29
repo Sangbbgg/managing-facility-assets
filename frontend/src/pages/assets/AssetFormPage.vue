@@ -125,7 +125,7 @@ const form = ref({
 
 const required = (msg) => ({ required: true, message: msg, trigger: ['blur', 'change'] })
 
-const groupOptions    = computed(() => groupStore.codeable.map(g => ({ label: `${g.full_path || g.name} [${g.code}]`, value: g.id })))
+const groupOptions    = computed(() => groupStore.codeable.map(g => ({ label: `${g.full_path || g.name} [${g.display_code || g.code}]`, value: g.id })))
 const locationOptions = computed(() => locationStore.list.map(l => ({ label: l.full_path || l.name, value: l.id })))
 const osOptions       = computed(() => catalogStore.osList.map(o => ({ label: `${o.name} ${o.version || ''}`.trim(), value: o.id })))
 const avOptions       = computed(() => catalogStore.avList.map(a => ({ label: `${a.name} ${a.version || ''}`.trim(), value: a.id })))

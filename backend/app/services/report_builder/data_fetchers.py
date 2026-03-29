@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.asset import Asset
 from app.models.master import (
     GroupNode, LocationNode, EquipmentType,
-    OsCatalog, AntivirusCatalog, Person, Department,
+    OsCatalog, AntivirusCatalog, Person,
 )
 from app.models.record import (
     InspectionRecord, EventLogRecord,
@@ -28,20 +28,16 @@ async def _load_masters(db: AsyncSession):
     os_map   = {r.id: r for r in (await db.execute(select(OsCatalog))).scalars()}
     av_map   = {r.id: r for r in (await db.execute(select(AntivirusCatalog))).scalars()}
     persons  = {r.id: r for r in (await db.execute(select(Person))).scalars()}
-    depts    = {r.id: r for r in (await db.execute(select(Department))).scalars()}
-    return groups, locs, eq_types, os_map, av_map, persons, depts
+    return groups, locs, eq_types, os_map, av_map, persons
 
 
-def _asset_row(a, groups, locs, eq_types, os_map, av_map, persons, depts) -> dict:
+def _asset_row(a, groups, locs, eq_types, os_map, av_map, persons) -> dict:
     grp      = groups.get(a.group_id)
     loc      = locs.get(a.location_id)
     eq       = eq_types.get(a.equipment_type_id)
     os       = os_map.get(a.os_id)
     av       = av_map.get(a.av_id)
     mgr      = persons.get(a.manager_id)
-    sup      = persons.get(a.supervisor_id)
-    mgr_dept = depts.get(mgr.dept_id) if mgr and mgr.dept_id else None
-    sup_dept = depts.get(sup.dept_id) if sup and sup.dept_id else None
     return {
         "id":                  a.id,
         "asset_code":          a.asset_code or "",
@@ -72,11 +68,7 @@ def _asset_row(a, groups, locs, eq_types, os_map, av_map, persons, depts) -> dic
         "av_support_end":      _d(av.support_end) if av else "",
         "manager_name":        mgr.name if mgr else "",
         "manager_title":       (mgr.title or "") if mgr else "",
-        "manager_dept":        mgr_dept.name if mgr_dept else "",
         "manager_contact":     (mgr.contact or "") if mgr else "",
-        "supervisor_name":     sup.name if sup else "",
-        "supervisor_title":    (sup.title or "") if sup else "",
-        "supervisor_dept":     sup_dept.name if sup_dept else "",
     }
 
 

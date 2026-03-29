@@ -192,7 +192,7 @@ const listColumns = [
 const codeableGroupOptions = computed(() =>
   groupStore.list
     .filter(g => g.code)
-    .map(g => ({ label: `${g.full_path} (${g.code})`, value: g.id }))
+    .map(g => ({ label: `${g.full_path} (${g.display_code || g.code})`, value: g.id }))
 )
 
 const typeOptions = computed(() =>

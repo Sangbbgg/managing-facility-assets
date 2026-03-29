@@ -1,13 +1,17 @@
 from __future__ import annotations
+
 from datetime import date, datetime
 from typing import Optional
-from sqlalchemy import String, Integer, Date, DateTime, ForeignKey, Text, Boolean, func
+
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.core.database import Base
 
 
 class Asset(Base):
     __tablename__ = "assets"
+
     id: Mapped[int] = mapped_column(primary_key=True)
     asset_code: Mapped[str] = mapped_column(String(30), unique=True, index=True)
     asset_name: Mapped[str] = mapped_column(String(100))
@@ -28,13 +32,12 @@ class Asset(Base):
     os_id: Mapped[Optional[int]] = mapped_column(ForeignKey("os_catalog.id"), nullable=True)
     av_id: Mapped[Optional[int]] = mapped_column(ForeignKey("antivirus_catalog.id"), nullable=True)
     manager_id: Mapped[Optional[int]] = mapped_column(ForeignKey("persons.id"), nullable=True)
-    supervisor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("persons.id"), nullable=True)
     manager: Mapped[Optional["Person"]] = relationship("Person", foreign_keys=[manager_id])
-    supervisor: Mapped[Optional["Person"]] = relationship("Person", foreign_keys=[supervisor_id])
 
 
 class AssetCodeSequence(Base):
     __tablename__ = "asset_code_sequences"
+
     id: Mapped[int] = mapped_column(primary_key=True)
     group_code: Mapped[str] = mapped_column(String(20))
     type_code: Mapped[str] = mapped_column(String(10))
@@ -43,6 +46,7 @@ class AssetCodeSequence(Base):
 
 class AssetChangeLog(Base):
     __tablename__ = "asset_change_log"
+
     id: Mapped[int] = mapped_column(primary_key=True)
     asset_id: Mapped[int] = mapped_column(ForeignKey("assets.id"))
     changed_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

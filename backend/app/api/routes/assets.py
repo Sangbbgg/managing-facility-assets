@@ -3,11 +3,11 @@ from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.database import get_db
-from app.core.config import settings
-from app.schemas.asset import AssetCreate, AssetRead, AssetUpdate
-from app.models.asset import Asset, AssetCodeSequence, AssetChangeLog
+from app.schemas.asset import AssetCreate, AssetDetailListItem, AssetRead, AssetUpdate
+from app.models.asset import Asset, AssetChangeLog
 from app.models.master import GroupNode, EquipmentType
-from app.services.asset_code import issue_asset_code
+from app.services.asset_code import issue_asset_code, preview_asset_code as preview_next_asset_code
+from app.services.asset_manager_assignment import assign_asset_manager_if_missing
 
 router = APIRouter()
 
@@ -27,18 +27,18 @@ async def preview_asset_code(
         raise HTTPException(400, "code가 있는 그룹 노드를 선택해주세요")
     if not etype:
         raise HTTPException(400, "존재하지 않는 장비 종류입니다")
-
-    seq_row = await db.scalar(
-        select(AssetCodeSequence).where(
-            AssetCodeSequence.group_code == group.code,
-            AssetCodeSequence.type_code == etype.code,
-        )
+    sequence_group_code = group.display_code or group.code
+    display_group_code = group.display_code or group.code
+    preview, next_seq = await preview_next_asset_code(
+        db,
+        sequence_group_code,
+        display_group_code,
+        etype.code,
     )
-    next_seq = (seq_row.last_seq + 1) if seq_row else 1
-    preview = f"{settings.ASSET_PREFIX}-{group.code}-{etype.code}-{next_seq:04d}"
     return {
         "preview_code": preview,
-        "group_code": group.code,
+        "group_code": display_group_code,
+        "sequence_group_code": sequence_group_code,
         "type_code": etype.code,
         "next_seq": next_seq,
     }
@@ -74,6 +74,13 @@ async def get_enriched_assets(db: AsyncSession = Depends(get_db)):
     return await fetch_asset_rows(0, None, db)
 
 
+@router.get("/detail-list", response_model=list[AssetDetailListItem])
+async def get_asset_detail_list(db: AsyncSession = Depends(get_db)):
+    """자산 상세 검토 화면용 단일 목록 응답"""
+    from app.services.asset_detail_list import fetch_asset_detail_list
+    return await fetch_asset_detail_list(db)
+
+
 # ─── 컬렉션 경로 ────────────────────────────────────────────────────────────────
 
 @router.get("", response_model=list[AssetRead])
@@ -99,8 +106,11 @@ async def create_asset(body: AssetCreate, db: AsyncSession = Depends(get_db)):
     eq_type = await db.get(EquipmentType, body.equipment_type_id)
     if not eq_type:
         raise HTTPException(400, "존재하지 않는 장비 종류입니다")
-    asset_code = await issue_asset_code(db, group.code, eq_type.code)
+    sequence_group_code = group.display_code or group.code
+    display_group_code = group.display_code or group.code
+    asset_code = await issue_asset_code(db, sequence_group_code, display_group_code, eq_type.code)
     asset = Asset(**body.model_dump(), asset_code=asset_code, is_deleted=False)
+    await assign_asset_manager_if_missing(db, asset)
     db.add(asset)
     await db.flush()
     await db.refresh(asset)
@@ -129,6 +139,7 @@ async def update_asset(asset_id: int, body: AssetUpdate, db: AsyncSession = Depe
 
     for k, v in new_data.items():
         setattr(asset, k, v)
+    await assign_asset_manager_if_missing(db, asset)
     await db.flush()
 
     # 변경 이력 기록

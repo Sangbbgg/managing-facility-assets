@@ -77,6 +77,7 @@ async def create_group(body: GroupNodeCreate, db: AsyncSession = Depends(get_db)
     depth = await _compute_depth(db, body.parent_id)
     data = body.model_dump()
     data['code'] = data.get('code') or None  # 빈 문자열 → NULL
+    data['display_code'] = data.get('display_code') or data.get('code') or None
     node = GroupNode(**data, full_path=full_path, depth=depth)
     db.add(node)
     try:
@@ -98,6 +99,8 @@ async def update_group(node_id: int, body: GroupNodeUpdate, db: AsyncSession = D
         await _validate_parent(db, node_id, data['parent_id'])
     if 'code' in data:
         data['code'] = data['code'] or None
+    if 'display_code' in data or 'code' in data:
+        data['display_code'] = data.get('display_code') or data.get('code') or None
     for k, v in data.items():
         setattr(node, k, v)
     if 'name' in data or 'parent_id' in data:

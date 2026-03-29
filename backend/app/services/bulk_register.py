@@ -9,6 +9,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.services.asset_code import issue_asset_code
+from app.services.asset_manager_assignment import assign_asset_manager_if_missing
 from app.models.master import GroupNode, EquipmentType, LocationNode
 from app.models.asset import Asset, AssetCodeSequence
 from app.core.config import settings
@@ -82,7 +83,8 @@ async def generate_template(db: AsyncSession) -> str:
     seq_result = await db.execute(select(AssetCodeSequence))
     seq_rows = {(s.group_code, s.type_code): s.last_seq for s in seq_result.scalars().all()}
 
-    ref_data_rows = len(groups) * len(eq_types)  # 자산코드 참고 시트 데이터 행 수
+    unique_display_group_codes = {g.display_code or g.code for g in groups}
+    ref_data_rows = len(unique_display_group_codes) * len(eq_types)  # 자산코드 참고 시트 데이터 행 수
     ref_last_row = ref_data_rows + 1              # 헤더 1행 + 데이터
 
     wb = Workbook()
@@ -124,7 +126,7 @@ async def generate_template(db: AsyncSession) -> str:
     # ── 2. 목록 시트 (숨김) ────────────────────────────────────────────────
     ws_list = wb.create_sheet("목록")
 
-    group_labels = [f"{g.full_path} ({g.code})" for g in groups]
+    group_labels = [f"{g.full_path} ({g.display_code or g.code})" for g in groups]
     for i, label in enumerate(group_labels, 1):
         ws_list.cell(i, 1, label)
 
@@ -184,12 +186,20 @@ async def generate_template(db: AsyncSession) -> str:
     ws_ref.column_dimensions["F"].width = 30
 
     row = 2
+    seen_ref_keys: set[tuple[str, str]] = set()
     for g in groups:
         for t in eq_types:
-            last_seq = seq_rows.get((g.code, t.code), 0)
+            sequence_group_code = g.display_code or g.code
+            display_group_code = g.display_code or g.code
+            ref_key = (display_group_code, t.code)
+            if ref_key in seen_ref_keys:
+                continue
+            seen_ref_keys.add(ref_key)
+
+            last_seq = seq_rows.get((sequence_group_code, t.code), 0)
             next_seq = last_seq + 1
-            next_code = f"{settings.ASSET_PREFIX}-{g.code}-{t.code}-{next_seq:04d}"
-            ws_ref.cell(row, 1, g.code)
+            next_code = f"{settings.ASSET_PREFIX}-{display_group_code}-{t.code}-{next_seq:04d}"
+            ws_ref.cell(row, 1, display_group_code)
             ws_ref.cell(row, 2, g.full_path)
             ws_ref.cell(row, 3, t.code)
             ws_ref.cell(row, 4, t.name)
@@ -204,7 +214,7 @@ async def generate_template(db: AsyncSession) -> str:
 
 # ── 파싱 & 등록 ──────────────────────────────────────────────────────────────
 
-_CODE_RE = re.compile(r"\((\w+)\)\s*$")
+_CODE_RE = re.compile(r"\(([\w-]+)\)\s*$")
 
 
 def _extract_code(value: str) -> str | None:
@@ -221,6 +231,14 @@ async def parse_and_register(file: UploadFile, db: AsyncSession) -> dict:
 
     loc_result = await db.execute(select(LocationNode))
     location_map = {loc.full_path: loc.id for loc in loc_result.scalars().all() if loc.full_path}
+
+    group_result = await db.execute(select(GroupNode).where(GroupNode.code.isnot(None)))
+    groups = group_result.scalars().all()
+    group_label_map = {
+        f"{group.full_path} ({group.display_code or group.code})": group
+        for group in groups
+    }
+    group_code_map = {group.code: group for group in groups}
 
     results = {"success": 0, "errors": []}
 
@@ -241,10 +259,13 @@ async def parse_and_register(file: UploadFile, db: AsyncSession) -> dict:
                 results["errors"].append({"row": row_idx, "error": "자산명·그룹·장비종류는 필수입니다"})
                 continue
 
-            group_code = _extract_code(str(group_val))
+            group_label = str(group_val).strip()
+            group_code = _extract_code(group_label)
             type_code  = _extract_code(str(type_val))
 
-            group = await db.scalar(select(GroupNode).where(GroupNode.code == group_code))
+            group = group_label_map.get(group_label)
+            if group is None:
+                group = group_code_map.get(group_code)
             etype = await db.scalar(select(EquipmentType).where(EquipmentType.code == type_code))
             if not group:
                 results["errors"].append({"row": row_idx, "error": f"그룹 '{group_val}' 없음"})
@@ -261,7 +282,9 @@ async def parse_and_register(file: UploadFile, db: AsyncSession) -> dict:
                     results["errors"].append({"row": row_idx, "error": f"위치 '{loc_fp}' 없음"})
                     continue
 
-            asset_code = await issue_asset_code(db, group_code, type_code)
+            sequence_group_code = group.display_code or group.code
+            display_group_code = group.display_code or group.code
+            asset_code = await issue_asset_code(db, sequence_group_code, display_group_code, type_code)
 
             asset = Asset(
                 asset_code=asset_code,
@@ -272,6 +295,7 @@ async def parse_and_register(file: UploadFile, db: AsyncSession) -> dict:
                 importance=str(importance) if importance else "중",
                 install_date=install_date if hasattr(install_date, 'year') else None,
             )
+            await assign_asset_manager_if_missing(db, asset)
             db.add(asset)
             await db.flush()
             results["success"] += 1

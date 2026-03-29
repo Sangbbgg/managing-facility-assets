@@ -1,16 +1,16 @@
 <template>
   <PageShell title="자산 상세 검토">
-    <div style="height:calc(100vh - 140px);">
-      <div style="display:flex; flex-direction:column; gap:8px;">
+    <div style="height: calc(100vh - 140px);">
+      <div style="display: flex; flex-direction: column; gap: 8px;">
         <n-input
           v-model:value="search"
           placeholder="자산번호 / 자산명 검색"
           clearable
           size="small"
-          style="max-width:360px;"
+          style="max-width: 360px;"
         />
         <ListHeader title="장비 종류별 자산 목록" :count="filteredList.length" />
-        <n-alert type="info" :show-icon="false" style="font-size:12px;">
+        <n-alert type="info" :show-icon="false" style="font-size: 12px;">
           장비 종류 탭을 선택한 뒤 자산 목록에서 공통 항목을 바로 수정하거나 상세 버튼으로 세부 화면을 엽니다.
         </n-alert>
 
@@ -21,16 +21,30 @@
             :name="group.key"
             :tab="`${group.title} (${group.items.length})`"
           >
-            <n-data-table
-              :columns="listColumns"
-              :data="group.items"
-              :pagination="false"
-              :bordered="false"
-              :single-line="false"
-              :row-key="row => row.id"
-              :scroll-x="1680"
-              size="small"
-            />
+            <div
+              :ref="(el) => setTopScrollRef(group.key, el)"
+              style="width: 100%; overflow-x: scroll; overflow-y: hidden; margin-bottom: 6px; padding-right: 16px; box-sizing: border-box;"
+              @scroll="syncScroll(group.key, 'top')"
+            >
+              <div :style="{ width: tableScrollWidthPx, height: '1px' }"></div>
+            </div>
+            <div
+              :ref="(el) => setBottomScrollRef(group.key, el)"
+              style="width: 100%; overflow-x: scroll; overflow-y: hidden; padding-bottom: 6px; box-sizing: border-box;"
+              @scroll="syncScroll(group.key, 'bottom')"
+            >
+              <div :style="{ width: tableScrollWidthPx, paddingRight: '16px', boxSizing: 'border-box' }">
+                <n-data-table
+                  :columns="listColumns"
+                  :data="group.items"
+                  :pagination="false"
+                  :bordered="false"
+                  :single-line="false"
+                  :row-key="(row) => row.id"
+                  size="small"
+                />
+              </div>
+            </div>
           </n-tab-pane>
         </n-tabs>
 
@@ -38,7 +52,7 @@
           v-if="!equipmentTabs.length"
           description="표시할 자산이 없습니다."
           size="small"
-          style="margin-top:16px;"
+          style="margin-top: 16px;"
         />
       </div>
     </div>
@@ -46,68 +60,68 @@
     <n-modal
       v-model:show="detailModalVisible"
       preset="card"
-      style="width:min(1280px, calc(100vw - 48px));"
+      style="width: min(1280px, calc(100vw - 48px));"
       content-style="padding: 0;"
       :mask-closable="true"
       :bordered="false"
       size="huge"
     >
       <template #header>
-        <n-text strong style="font-size:18px;">자산 상세 검토</n-text>
+        <n-text strong style="font-size: 18px;">자산 상세 검토</n-text>
       </template>
 
-      <div v-if="displayAsset" style="height:75vh; overflow-y:scroll; padding:16px;">
-        <n-card size="small" style="margin-bottom:12px;">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
-            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div v-if="displayAsset" style="height: 75vh; overflow-y: scroll; padding: 16px;">
+        <n-card size="small" style="margin-bottom: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
               <n-tag type="info" size="large">{{ displayAsset.asset_code }}</n-tag>
-              <n-text style="font-size:18px; font-weight:600;">{{ displayAsset.asset_name }}</n-text>
+              <n-text style="font-size: 18px; font-weight: 600;">{{ displayAsset.asset_name }}</n-text>
               <n-tag size="small" :type="statusTagType(displayAsset.status)">
                 {{ statusLabel(displayAsset.status) }}
               </n-tag>
             </div>
-            <n-text depth="3" style="font-size:12px;">
+            <n-text depth="3" style="font-size: 12px;">
               자동 수집 데이터를 확인한 뒤 필요한 항목만 보완합니다.
             </n-text>
           </div>
 
-          <n-grid :cols="4" :x-gap="12" :y-gap="10" style="margin-top:14px;">
+          <n-grid :cols="4" :x-gap="12" :y-gap="10" style="margin-top: 14px;">
             <n-gi>
-              <n-text depth="3" style="font-size:12px; display:block;">장비 유형</n-text>
+              <n-text depth="3" style="font-size: 12px; display: block;">장비 유형</n-text>
               <n-text>{{ displayAsset.equipment_type_name || '-' }}</n-text>
             </n-gi>
             <n-gi>
-              <n-text depth="3" style="font-size:12px; display:block;">위치</n-text>
+              <n-text depth="3" style="font-size: 12px; display: block;">위치</n-text>
               <div v-if="locationPath.hasValue">
-                <n-text depth="3" style="font-size:12px; line-height:1.5;">
+                <n-text depth="3" style="font-size: 12px; line-height: 1.5;">
                   {{ locationPath.parentText }}
                 </n-text>
-                <n-text strong style="display:block; font-size:15px; line-height:1.5;">
+                <n-text strong style="display: block; font-size: 15px; line-height: 1.5;">
                   {{ locationPath.leaf }}
                 </n-text>
               </div>
               <n-text v-else>-</n-text>
             </n-gi>
             <n-gi>
-              <n-text depth="3" style="font-size:12px; display:block;">그룹</n-text>
+              <n-text depth="3" style="font-size: 12px; display: block;">그룹</n-text>
               <div v-if="groupPath.hasValue">
-                <n-text depth="3" style="font-size:12px; line-height:1.5;">
+                <n-text depth="3" style="font-size: 12px; line-height: 1.5;">
                   {{ groupPath.parentText }}
                 </n-text>
-                <n-text strong style="display:block; font-size:15px; line-height:1.5;">
+                <n-text strong style="display: block; font-size: 15px; line-height: 1.5;">
                   {{ groupPath.leaf }}
                 </n-text>
               </div>
               <n-text v-else>-</n-text>
             </n-gi>
             <n-gi>
-              <n-text depth="3" style="font-size:12px; display:block;">마지막 수집</n-text>
+              <n-text depth="3" style="font-size: 12px; display: block;">마지막 수집</n-text>
               <n-text>{{ formatDateTime(displayAsset.last_collected_at) }}</n-text>
             </n-gi>
           </n-grid>
         </n-card>
 
-        <n-alert type="warning" :show-icon="false" style="margin-bottom:12px; font-size:12px;">
+        <n-alert type="warning" :show-icon="false" style="margin-bottom: 12px; font-size: 12px;">
           이 팝업은 자산 1건의 운영 상태를 검토하고 예외 정보만 수정하는 작업 공간입니다.
         </n-alert>
 
@@ -115,23 +129,18 @@
           <n-tab-pane name="basic" tab="공통 정보">
             <AssetBasicInfoTab :asset="displayAsset" @updated="reloadAsset" />
           </n-tab-pane>
-
           <n-tab-pane name="hardware" tab="수집 하드웨어">
             <AssetHardwareTab :asset-id="selectedId" />
           </n-tab-pane>
-
           <n-tab-pane name="software" tab="수집 소프트웨어">
             <AssetSoftwareTab :asset-id="selectedId" />
           </n-tab-pane>
-
           <n-tab-pane name="custom" tab="보완 메모">
             <AssetCustomFieldsTab :asset-id="selectedId" />
           </n-tab-pane>
-
           <n-tab-pane name="collect" tab="수집 업로드">
             <AssetCollectUploadTab :asset-id="selectedId" @collected="onCollected" />
           </n-tab-pane>
-
           <n-tab-pane name="changelog" tab="변경 이력">
             <AssetChangeLogTab :asset-id="selectedId" />
           </n-tab-pane>
@@ -144,7 +153,7 @@
 </template>
 
 <script setup>
-import { computed, h, onMounted, ref, watch } from 'vue'
+import { computed, h, nextTick, onMounted, ref, watch } from 'vue'
 import { NButton, NDatePicker, NInput, NSelect, useMessage } from 'naive-ui'
 import { useRoute } from 'vue-router'
 import PageShell from '@/components/common/PageShell.vue'
@@ -160,7 +169,7 @@ import { useAssetHwStore } from '@/stores/assetHwStore'
 import { useAssetSwStore } from '@/stores/assetSwStore'
 import { useCatalogStore } from '@/stores/catalogStore'
 import { usePersonStore } from '@/stores/personStore'
-import client from '@/api/client'
+import { assetsApi } from '@/api/assetsApi'
 
 const route = useRoute()
 const message = useMessage()
@@ -171,7 +180,7 @@ const catalogStore = useCatalogStore()
 const personStore = usePersonStore()
 
 const search = ref('')
-const assets = ref([])
+const detailRows = ref([])
 const selectedId = ref(null)
 const selectedAsset = ref(null)
 const selectedAssetSummary = ref(null)
@@ -179,6 +188,9 @@ const activeTab = ref('basic')
 const detailModalVisible = ref(false)
 const activeEquipmentTypeKey = ref(null)
 const rowDrafts = ref({})
+const topScrollRefs = {}
+const bottomScrollRefs = {}
+let syncingScroll = false
 
 const STATUS_LABELS = {
   OPERATING: '운영중',
@@ -207,25 +219,13 @@ const IMPORTANCE_OPTIONS = [
   { label: '하', value: '하' },
 ]
 
-const personOptions = computed(() =>
-  personStore.list.map((person) => ({ label: person.name, value: person.id }))
-)
-
-const mergedAssets = computed(() => {
-  const baseById = new Map(assetStore.list.map((asset) => [asset.id, asset]))
-  return assets.value.map((asset) => ({
-    ...(baseById.get(asset.id) || {}),
-    ...asset,
-  }))
-})
-
 const filteredList = computed(() => {
-  const q = search.value.trim().toLowerCase()
-  return mergedAssets.value.filter((asset) => {
-    if (!q) return true
+  const query = search.value.trim().toLowerCase()
+  return detailRows.value.filter((asset) => {
+    if (!query) return true
     return (
-      String(asset.asset_code || '').toLowerCase().includes(q) ||
-      String(asset.asset_name || '').toLowerCase().includes(q)
+      String(asset.asset_code || '').toLowerCase().includes(query) ||
+      String(asset.asset_name || '').toLowerCase().includes(query)
     )
   })
 })
@@ -245,20 +245,16 @@ const groupPath = computed(() =>
 
 const equipmentTabs = computed(() => {
   const tabs = [
-    {
-      key: 'type-all',
-      title: '전체',
-      items: filteredList.value,
-    },
+    { key: 'type-all', title: '전체', items: filteredList.value },
     ...(catalogStore.equipmentTypes || []).map((type) => ({
-    key: `type-${type.id}`,
-    title: type.name || type.code || `장비 종류 ${type.id}`,
-    items: filteredList.value.filter((asset) => {
-      if (asset.equipment_type_code) {
-        return asset.equipment_type_code === type.code
-      }
-      return asset.equipment_type_id === type.id
-    }),
+      key: `type-${type.id}`,
+      title: type.name || type.code || `장비 종류 ${type.id}`,
+      items: filteredList.value.filter((asset) => {
+        if (asset.equipment_type_code) {
+          return asset.equipment_type_code === type.code
+        }
+        return asset.equipment_type_id === type.id
+      }),
     })),
   ]
 
@@ -269,11 +265,7 @@ const equipmentTabs = computed(() => {
   })
 
   if (unassignedItems.length) {
-    tabs.push({
-      key: 'type-unassigned',
-      title: '미지정',
-      items: unassignedItems,
-    })
+    tabs.push({ key: 'type-unassigned', title: '미지정', items: unassignedItems })
   }
 
   return tabs
@@ -355,32 +347,17 @@ const listColumns = computed(() => [
   },
   {
     key: 'manager_id',
-    title: '담당자(정)',
+    title: '담당자',
     width: 150,
-    sorter: (a, b) => compareValues(findPersonName(getRowValue(a, 'manager_id')), findPersonName(getRowValue(b, 'manager_id'))),
+    sorter: (a, b) => compareValues(getManagerName(getRowValue(a, 'manager_id')), getManagerName(getRowValue(b, 'manager_id'))),
     render: (row) =>
       h(NSelect, {
         value: getRowValue(row, 'manager_id'),
-        options: personOptions.value,
+        options: getManagerOptionsForRow(row),
         clearable: true,
         size: 'small',
         consistentMenuWidth: false,
         'onUpdate:value': (value) => saveRowField(row, 'manager_id', value ?? null),
-      }),
-  },
-  {
-    key: 'supervisor_id',
-    title: '담당자(부)',
-    width: 150,
-    sorter: (a, b) => compareValues(findPersonName(getRowValue(a, 'supervisor_id')), findPersonName(getRowValue(b, 'supervisor_id'))),
-    render: (row) =>
-      h(NSelect, {
-        value: getRowValue(row, 'supervisor_id'),
-        options: personOptions.value,
-        clearable: true,
-        size: 'small',
-        consistentMenuWidth: false,
-        'onUpdate:value': (value) => saveRowField(row, 'supervisor_id', value ?? null),
       }),
   },
   {
@@ -429,11 +406,17 @@ const listColumns = computed(() => [
   },
 ])
 
+const tableScrollWidth = computed(() =>
+  listColumns.value.reduce((sum, column) => sum + (Number(column.width) || 0), 0) + 64
+)
+
+const tableScrollWidthPx = computed(() => `${tableScrollWidth.value}px`)
+
 async function openDetail(id) {
   selectedId.value = id
   activeTab.value = 'basic'
   detailModalVisible.value = true
-  selectedAssetSummary.value = mergedAssets.value.find((asset) => asset.id === id) || null
+  selectedAssetSummary.value = detailRows.value.find((asset) => asset.id === id) || null
   await reloadAsset()
   hwStore.reset()
   swStore.reset()
@@ -443,6 +426,13 @@ async function reloadAsset() {
   if (!selectedId.value) return
   await assetStore.fetchOne(selectedId.value)
   selectedAsset.value = assetStore.current
+
+  detailRows.value = detailRows.value.map((row) => {
+    if (row.id !== selectedId.value) return row
+    return { ...row, ...assetStore.current }
+  })
+  selectedAssetSummary.value =
+    detailRows.value.find((asset) => asset.id === selectedId.value) || selectedAssetSummary.value
 }
 
 async function onCollected() {
@@ -483,22 +473,15 @@ function compareValues(a, b) {
 
 function splitPath(value) {
   const raw = String(value || '').trim()
-  if (!raw) {
-    return { hasValue: false, parentText: '', leaf: '' }
-  }
+  if (!raw) return { hasValue: false, parentText: '', leaf: '' }
 
   const parts = raw
     .split('>')
     .map((part) => part.trim())
     .filter(Boolean)
 
-  if (!parts.length) {
-    return { hasValue: false, parentText: '', leaf: '' }
-  }
-
-  if (parts.length === 1) {
-    return { hasValue: true, parentText: '', leaf: parts[0] }
-  }
+  if (!parts.length) return { hasValue: false, parentText: '', leaf: '' }
+  if (parts.length === 1) return { hasValue: true, parentText: '', leaf: parts[0] }
 
   return {
     hasValue: true,
@@ -511,6 +494,9 @@ function getRowValue(row, key) {
   const draft = rowDrafts.value[row.id]
   if (draft && Object.prototype.hasOwnProperty.call(draft, key)) {
     return draft[key]
+  }
+  if (key === 'manager_id') {
+    return row.manager_id ?? row.resolved_manager_id ?? null
   }
   return row[key]
 }
@@ -527,13 +513,19 @@ function setRowDraft(rowId, key, value) {
 
 async function saveRowField(row, key, immediateValue) {
   const nextValue = immediateValue !== undefined ? immediateValue : getRowValue(row, key)
-  const currentValue = row[key] ?? null
-  if ((nextValue ?? null) === currentValue) return
+  const payload = { [key]: nextValue }
+
+  const changedEntries = Object.entries(payload).filter(
+    ([field, value]) => (value ?? null) !== (row[field] ?? null)
+  )
+  if (!changedEntries.length) return
 
   try {
-    const updated = await assetStore.update(row.id, { [key]: nextValue })
-    applyAssetUpdate(row.id, key, nextValue, updated)
-    clearRowDraft(row.id, key)
+    const updated = await assetStore.update(row.id, Object.fromEntries(changedEntries))
+    for (const [field, value] of changedEntries) {
+      applyAssetUpdate(row.id, field, value, updated)
+      clearRowDraft(row.id, field)
+    }
   } catch (error) {
     message.error(error.message || '자산 정보를 저장하지 못했습니다.')
   }
@@ -550,16 +542,14 @@ function clearRowDraft(rowId, key) {
 }
 
 function applyAssetUpdate(id, key, value, updatedAsset) {
-  const nextList = assetStore.list.map((asset) =>
-    asset.id === id ? { ...asset, ...updatedAsset } : asset
-  )
-  assetStore.list = nextList
-
-  assets.value = assets.value.map((asset) => {
+  detailRows.value = detailRows.value.map((asset) => {
     if (asset.id !== id) return asset
     const nextAsset = { ...asset, ...updatedAsset, [key]: value }
-    if (key === 'manager_id') nextAsset.manager_name = findPersonName(value)
-    if (key === 'supervisor_id') nextAsset.supervisor_name = findPersonName(value)
+    if (key === 'manager_id') {
+      nextAsset.manager_name = getManagerName(value)
+      nextAsset.resolved_manager_id = value
+      nextAsset.resolved_manager_name = getManagerName(value)
+    }
     return nextAsset
   })
 
@@ -571,9 +561,54 @@ function applyAssetUpdate(id, key, value, updatedAsset) {
   }
 }
 
-function findPersonName(personId) {
+function getManagerName(personId) {
   if (!personId) return ''
   return personStore.list.find((person) => person.id === personId)?.name || ''
+}
+
+function getManagerOptionsForRow(row) {
+  const options = personStore.list
+    .filter((person) =>
+      (person.group_roles || []).some(
+        (role) => role.group_id === row.group_id && role.role_type === 'PRIMARY'
+      )
+    )
+    .map((person) => ({ label: person.name, value: person.id }))
+
+  const currentManagerId = getRowValue(row, 'manager_id')
+  if (currentManagerId && !options.some((option) => option.value === currentManagerId)) {
+    const currentPerson = personStore.list.find((person) => person.id === currentManagerId)
+    if (currentPerson) {
+      options.unshift({ label: currentPerson.name, value: currentPerson.id })
+    }
+  }
+
+  return options
+}
+
+function setTopScrollRef(key, el) {
+  topScrollRefs[key] = el || null
+}
+
+function setBottomScrollRef(key, el) {
+  bottomScrollRefs[key] = el || null
+}
+
+function syncScroll(key, source) {
+  if (syncingScroll) return
+  const topEl = topScrollRefs[key]
+  const bottomEl = bottomScrollRefs[key]
+  if (!topEl || !bottomEl) return
+
+  syncingScroll = true
+  if (source === 'top') {
+    bottomEl.scrollLeft = topEl.scrollLeft
+  } else {
+    topEl.scrollLeft = bottomEl.scrollLeft
+  }
+  requestAnimationFrame(() => {
+    syncingScroll = false
+  })
 }
 
 watch(
@@ -592,20 +627,26 @@ watch(
   { immediate: true }
 )
 
-onMounted(async () => {
-  await Promise.all([
-    loadAssets(),
-    assetStore.fetchList(),
-    catalogStore.fetchEquipmentTypes(),
-    personStore.fetchList(),
-  ])
+watch(activeEquipmentTypeKey, () => {
+  nextTick(() => {
+    const key = activeEquipmentTypeKey.value
+    if (!key) return
+    const topEl = topScrollRefs[key]
+    const bottomEl = bottomScrollRefs[key]
+    if (topEl && bottomEl) {
+      topEl.scrollLeft = bottomEl.scrollLeft
+    }
+  })
+})
 
-  const qid = route.query.id ? Number(route.query.id) : null
-  if (qid) await openDetail(qid)
+onMounted(async () => {
+  await Promise.all([loadAssets(), catalogStore.fetchEquipmentTypes(), personStore.fetchList()])
+
+  const queryId = route.query.id ? Number(route.query.id) : null
+  if (queryId) await openDetail(queryId)
 })
 
 async function loadAssets() {
-  const { data } = await client.get('/api/assets/enriched')
-  assets.value = data
+  detailRows.value = await assetsApi.detailList()
 }
 </script>

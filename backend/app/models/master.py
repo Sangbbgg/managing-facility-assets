@@ -1,20 +1,24 @@
 from __future__ import annotations
+
 from datetime import date
 from typing import Optional
-from sqlalchemy import String, Integer, Date, ForeignKey, Text
+
+from sqlalchemy import Date, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.core.database import Base
 
 
 class LocationNode(Base):
     __tablename__ = "location_nodes"
+
     id: Mapped[int] = mapped_column(primary_key=True)
     parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("location_nodes.id", ondelete="CASCADE"), nullable=True)
     name: Mapped[str] = mapped_column(String(100))
     full_path: Mapped[str] = mapped_column(String(500))
     depth: Mapped[int] = mapped_column(Integer, default=0)
-    parent: Mapped[Optional[LocationNode]] = relationship("LocationNode", remote_side="LocationNode.id", back_populates="children")
-    children: Mapped[list[LocationNode]] = relationship(
+    parent: Mapped[Optional["LocationNode"]] = relationship("LocationNode", remote_side="LocationNode.id", back_populates="children")
+    children: Mapped[list["LocationNode"]] = relationship(
         "LocationNode",
         back_populates="parent",
         cascade="all, delete-orphan",
@@ -24,18 +28,22 @@ class LocationNode(Base):
 
 class GroupNode(Base):
     __tablename__ = "group_nodes"
+
     id: Mapped[int] = mapped_column(primary_key=True)
     parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("group_nodes.id", ondelete="CASCADE"), nullable=True)
     name: Mapped[str] = mapped_column(String(100))
     code: Mapped[Optional[str]] = mapped_column(String(20), unique=True, nullable=True)
+    display_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     full_path: Mapped[str] = mapped_column(String(500))
     depth: Mapped[int] = mapped_column(Integer, default=0)
-    parent: Mapped[Optional[GroupNode]] = relationship("GroupNode", remote_side="GroupNode.id", back_populates="children")
-    children: Mapped[list[GroupNode]] = relationship("GroupNode", back_populates="parent", cascade="all, delete-orphan", passive_deletes=True)
+    parent: Mapped[Optional["GroupNode"]] = relationship("GroupNode", remote_side="GroupNode.id", back_populates="children")
+    children: Mapped[list["GroupNode"]] = relationship("GroupNode", back_populates="parent", cascade="all, delete-orphan", passive_deletes=True)
+    person_roles: Mapped[list["PersonGroupRole"]] = relationship("PersonGroupRole", back_populates="group", cascade="all, delete-orphan", passive_deletes=True)
 
 
 class EquipmentType(Base):
     __tablename__ = "equipment_types"
+
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(50))
     code: Mapped[str] = mapped_column(String(10), unique=True)
@@ -44,6 +52,7 @@ class EquipmentType(Base):
 
 class OsCatalog(Base):
     __tablename__ = "os_catalog"
+
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True)
     version: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
@@ -54,6 +63,7 @@ class OsCatalog(Base):
 
 class AntivirusCatalog(Base):
     __tablename__ = "antivirus_catalog"
+
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100))
     version: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
@@ -63,6 +73,7 @@ class AntivirusCatalog(Base):
 
 class Department(Base):
     __tablename__ = "departments"
+
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True)
     code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
@@ -70,8 +81,29 @@ class Department(Base):
 
 class Person(Base):
     __tablename__ = "persons"
+
     id: Mapped[int] = mapped_column(primary_key=True)
-    dept_id: Mapped[Optional[int]] = mapped_column(ForeignKey("departments.id"), nullable=True)
     name: Mapped[str] = mapped_column(String(50))
     title: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     contact: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    group_roles: Mapped[list["PersonGroupRole"]] = relationship(
+        "PersonGroupRole",
+        back_populates="person",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class PersonGroupRole(Base):
+    __tablename__ = "person_group_roles"
+    __table_args__ = (
+        UniqueConstraint("person_id", "group_id", "role_type", name="uq_person_group_roles_person_group_role"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    person_id: Mapped[int] = mapped_column(ForeignKey("persons.id", ondelete="CASCADE"))
+    group_id: Mapped[int] = mapped_column(ForeignKey("group_nodes.id", ondelete="CASCADE"))
+    role_type: Mapped[str] = mapped_column(String(20))
+
+    person: Mapped["Person"] = relationship("Person", back_populates="group_roles")
+    group: Mapped["GroupNode"] = relationship("GroupNode", back_populates="person_roles")
