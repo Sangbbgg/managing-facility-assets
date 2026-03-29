@@ -2,7 +2,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
+from app.models.hw_info import AssetHwNic
 from app.models.master import EquipmentType, GroupNode, LocationNode, Person, PersonGroupRole
+from app.models.sw_info import AssetSwAccount
 
 
 async def fetch_asset_detail_list(db: AsyncSession) -> list[dict]:
@@ -18,6 +20,18 @@ async def fetch_asset_detail_list(db: AsyncSession) -> list[dict]:
     locations = {row.id: row for row in (await db.execute(select(LocationNode))).scalars()}
     equipment_types = {row.id: row for row in (await db.execute(select(EquipmentType))).scalars()}
     persons = {row.id: row for row in (await db.execute(select(Person))).scalars()}
+    nics = (
+        await db.execute(
+            select(AssetHwNic).where(AssetHwNic.asset_id.in_([asset.id for asset in assets]))
+        )
+    ).scalars().all()
+    nic_map = {row.id: row for row in nics}
+    accounts = (
+        await db.execute(
+            select(AssetSwAccount).where(AssetSwAccount.asset_id.in_([asset.id for asset in assets]))
+        )
+    ).scalars().all()
+    account_map = {row.id: row for row in accounts}
 
     group_role_map: dict[int, int] = {}
     group_roles = (
@@ -37,6 +51,11 @@ async def fetch_asset_detail_list(db: AsyncSession) -> list[dict]:
         resolved_manager_id = asset.manager_id or group_role_map.get(asset.group_id)
         resolved_manager = persons.get(resolved_manager_id) if resolved_manager_id else None
         explicit_manager = persons.get(asset.manager_id) if asset.manager_id else None
+        representative_account = (
+            account_map.get(asset.representative_account_id)
+            if asset.representative_account_id
+            else None
+        )
 
         rows.append(
             {
@@ -44,10 +63,16 @@ async def fetch_asset_detail_list(db: AsyncSession) -> list[dict]:
                 "asset_code": asset.asset_code,
                 "asset_name": asset.asset_name,
                 "purpose": asset.purpose,
-                "model_name": asset.model_name,
-                "serial_number": asset.serial_number,
                 "importance": asset.importance,
                 "install_date": asset.install_date,
+                "ip_address": (
+                    nic_map.get(asset.representative_nic_id).ipv4_address
+                    if asset.representative_nic_id and nic_map.get(asset.representative_nic_id)
+                    else None
+                ),
+                "representative_nic_id": asset.representative_nic_id,
+                "representative_account_id": asset.representative_account_id,
+                "representative_account_name": representative_account.account_name if representative_account else None,
                 "status": asset.status,
                 "last_collected_at": asset.last_collected_at,
                 "group_id": asset.group_id,
@@ -65,6 +90,7 @@ async def fetch_asset_detail_list(db: AsyncSession) -> list[dict]:
                 "manager_name": explicit_manager.name if explicit_manager else None,
                 "resolved_manager_id": resolved_manager_id,
                 "resolved_manager_name": resolved_manager.name if resolved_manager else None,
+                "custom_fields_json": asset.custom_fields_json or {},
             }
         )
 

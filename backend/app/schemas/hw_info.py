@@ -51,6 +51,7 @@ class HwMemoryRead(BaseModel):
     capacity_bytes: Optional[int] = None
     speed_mhz: Optional[int] = None
     manufacturer: Optional[str] = None
+    part_number: Optional[str] = None
     serial_number: Optional[str] = None
     form_factor: Optional[str] = None
     raw_json: Optional[dict] = None
@@ -93,7 +94,9 @@ class HwNicRead(BaseModel):
     ipv4_address: Optional[str] = None
     subnet_mask: Optional[str] = None
     default_gateway: Optional[str] = None
+    dns_servers: Optional[str] = None
     dhcp_enabled: Optional[bool] = None
+    is_unused: bool = False
     raw_json: Optional[dict] = None
     model_config = {"from_attributes": True}
 
@@ -105,3 +108,7 @@ class HwAllRead(BaseModel):
     disks: list[HwDiskRead] = []
     gpus: list[HwGpuRead] = []
     nics: list[HwNicRead] = []
+
+
+class UnusedNicUpdate(BaseModel):
+    nic_ids: list[int] = []

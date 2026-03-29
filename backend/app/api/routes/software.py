@@ -2,8 +2,17 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.database import get_db
-from app.models.sw_info import AssetSwProduct, AssetSwHotfix, AssetSwProcess
-from app.schemas.sw_info import SwProductRead, SwHotfixRead, SwProcessRead, SwAllRead
+from app.models.sw_info import AssetSwAccount, AssetSwHotfix, AssetSwProcess, AssetSwProduct
+from app.models.collection import AssetNetworkConnection
+from app.schemas.sw_info import (
+    AccountStatusUpdate,
+    SwAllRead,
+    SwAccountRead,
+    SwConnectionRead,
+    SwHotfixRead,
+    SwProcessRead,
+    SwProductRead,
+)
 
 router = APIRouter()
 
@@ -11,6 +20,8 @@ SW_MODEL_MAP = {
     "products":  (AssetSwProduct,  SwProductRead),
     "hotfixes":  (AssetSwHotfix,   SwHotfixRead),
     "processes": (AssetSwProcess,  SwProcessRead),
+    "accounts": (AssetSwAccount, SwAccountRead),
+    "connections": (AssetNetworkConnection, SwConnectionRead),
 }
 
 
@@ -56,3 +67,22 @@ async def delete_software(
     item = await db.get(model, sw_id)
     if item and item.asset_id == asset_id:
         await db.delete(item)
+
+
+@router.patch("/{asset_id}/software/accounts/status")
+async def update_account_statuses(
+    asset_id: int,
+    body: AccountStatusUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    rows = (
+        await db.execute(
+            select(AssetSwAccount).where(AssetSwAccount.asset_id == asset_id)
+        )
+    ).scalars().all()
+
+    disabled_ids = set(body.disabled_account_ids or [])
+    for row in rows:
+        row.enabled = row.id not in disabled_ids
+
+    return {"status": "ok", "updated_count": len(rows)}

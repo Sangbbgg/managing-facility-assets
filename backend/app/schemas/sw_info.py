@@ -39,7 +39,37 @@ class SwProcessRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SwAccountRead(BaseModel):
+    id: int
+    asset_id: int
+    collected_at: datetime
+    account_name: Optional[str] = None
+    enabled: Optional[bool] = None
+    comment: Optional[str] = None
+    raw_json: Optional[dict] = None
+    model_config = {"from_attributes": True}
+
+
+class SwConnectionRead(BaseModel):
+    id: int
+    asset_id: int
+    collected_at: datetime
+    protocol: Optional[str] = None
+    local_address: Optional[str] = None
+    remote_address: Optional[str] = None
+    state: Optional[str] = None
+    process_name: Optional[str] = None
+    raw_json: Optional[dict] = None
+    model_config = {"from_attributes": True}
+
+
 class SwAllRead(BaseModel):
     products: list[SwProductRead] = []
     hotfixes: list[SwHotfixRead] = []
     processes: list[SwProcessRead] = []
+    accounts: list[SwAccountRead] = []
+    connections: list[SwConnectionRead] = []
+
+
+class AccountStatusUpdate(BaseModel):
+    disabled_account_ids: list[int] = []

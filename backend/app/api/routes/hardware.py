@@ -8,8 +8,9 @@ from app.models.hw_info import (
 )
 from app.schemas.hw_info import (
     HwSystemRead, HwCpuRead, HwMemoryRead,
-    HwDiskRead, HwGpuRead, HwNicRead, HwAllRead,
+    HwDiskRead, HwGpuRead, HwNicRead, HwAllRead, UnusedNicUpdate,
 )
+from app.models.asset import Asset
 
 router = APIRouter()
 
@@ -65,3 +66,30 @@ async def delete_hardware(
     item = await db.get(model, hw_id)
     if item and item.asset_id == asset_id:
         await db.delete(item)
+
+
+@router.patch("/{asset_id}/hardware/nics/unused")
+async def update_unused_nics(
+    asset_id: int,
+    body: UnusedNicUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    asset = await db.get(Asset, asset_id)
+    if not asset or asset.is_deleted:
+        raise HTTPException(404, "자산을 찾을 수 없습니다")
+
+    rows = await db.execute(select(AssetHwNic).where(AssetHwNic.asset_id == asset_id))
+    nics = rows.scalars().all()
+    nic_map = {nic.id: nic for nic in nics}
+
+    requested_ids = {
+        nic_id
+        for nic_id in body.nic_ids
+        if nic_id in nic_map and nic_id != asset.representative_nic_id
+    }
+
+    for nic in nics:
+        nic.is_unused = nic.id in requested_ids
+
+    await db.flush()
+    return {"asset_id": asset_id, "unused_nic_ids": sorted(requested_ids)}

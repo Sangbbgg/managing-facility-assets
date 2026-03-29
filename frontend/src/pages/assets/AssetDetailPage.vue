@@ -14,6 +14,16 @@
           장비 종류 탭을 선택한 뒤 자산 목록에서 공통 항목을 바로 수정하거나 상세 버튼으로 세부 화면을 엽니다.
         </n-alert>
 
+        <div style="display: flex; gap: 8px; align-items: center; max-width: 520px;">
+          <n-input
+            v-model:value="newCustomFieldKey"
+            placeholder="보완 메모 공통 키 추가"
+            size="small"
+            @keydown.enter.prevent="addCustomFieldKey"
+          />
+          <n-button size="small" type="primary" @click="addCustomFieldKey">키 추가</n-button>
+        </div>
+
         <n-tabs v-model:value="activeEquipmentTypeKey" type="line" animated size="small">
           <n-tab-pane
             v-for="group in equipmentTabs"
@@ -127,7 +137,12 @@
 
         <n-tabs v-model:value="activeTab" type="line" animated>
           <n-tab-pane name="basic" tab="공통 정보">
-            <AssetBasicInfoTab :asset="displayAsset" @updated="reloadAsset" />
+            <AssetBasicInfoTab
+              :asset="displayAsset"
+              :nics="hwStore.all.nics || []"
+              :accounts="swStore.all.accounts || []"
+              @updated="reloadBasicContext"
+            />
           </n-tab-pane>
           <n-tab-pane name="hardware" tab="수집 하드웨어">
             <AssetHardwareTab :asset-id="selectedId" />
@@ -170,6 +185,7 @@ import { useAssetSwStore } from '@/stores/assetSwStore'
 import { useCatalogStore } from '@/stores/catalogStore'
 import { usePersonStore } from '@/stores/personStore'
 import { assetsApi } from '@/api/assetsApi'
+import { customFieldsApi } from '@/api/customFieldsApi'
 
 const route = useRoute()
 const message = useMessage()
@@ -188,6 +204,7 @@ const activeTab = ref('basic')
 const detailModalVisible = ref(false)
 const activeEquipmentTypeKey = ref(null)
 const rowDrafts = ref({})
+const newCustomFieldKey = ref('')
 const topScrollRefs = {}
 const bottomScrollRefs = {}
 let syncingScroll = false
@@ -271,6 +288,16 @@ const equipmentTabs = computed(() => {
   return tabs
 })
 
+const customFieldKeys = computed(() =>
+  Array.from(
+    new Set(
+      detailRows.value.flatMap((asset) =>
+        Object.keys(asset.custom_fields_json || {}).filter((key) => String(key).trim())
+      )
+    )
+  ).sort((a, b) => a.localeCompare(b, 'ko'))
+)
+
 const listColumns = computed(() => [
   {
     key: 'asset_code',
@@ -303,32 +330,6 @@ const listColumns = computed(() => [
         size: 'small',
         'onUpdate:value': (value) => setRowDraft(row.id, 'purpose', value),
         onBlur: () => saveRowField(row, 'purpose'),
-      }),
-  },
-  {
-    key: 'model_name',
-    title: '모델명',
-    width: 160,
-    sorter: (a, b) => compareValues(getRowValue(a, 'model_name'), getRowValue(b, 'model_name')),
-    render: (row) =>
-      h(NInput, {
-        value: getRowValue(row, 'model_name') || '',
-        size: 'small',
-        'onUpdate:value': (value) => setRowDraft(row.id, 'model_name', value),
-        onBlur: () => saveRowField(row, 'model_name'),
-      }),
-  },
-  {
-    key: 'serial_number',
-    title: '시리얼 번호',
-    width: 160,
-    sorter: (a, b) => compareValues(getRowValue(a, 'serial_number'), getRowValue(b, 'serial_number')),
-    render: (row) =>
-      h(NInput, {
-        value: getRowValue(row, 'serial_number') || '',
-        size: 'small',
-        'onUpdate:value': (value) => setRowDraft(row.id, 'serial_number', value),
-        onBlur: () => saveRowField(row, 'serial_number'),
       }),
   },
   {
@@ -404,6 +405,34 @@ const listColumns = computed(() => [
         { default: () => '상세' }
       ),
   },
+  ...customFieldKeys.value.map((fieldKey) => ({
+    key: `custom_field::${fieldKey}`,
+    title: () =>
+      h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } }, [
+        h('span', { style: { whiteSpace: 'nowrap' } }, fieldKey),
+        h(
+          NButton,
+          {
+            size: 'tiny',
+            tertiary: true,
+            type: 'error',
+            onClick: (event) => {
+              event?.stopPropagation?.()
+              deleteCustomFieldKey(fieldKey)
+            },
+          },
+          { default: () => '삭제' }
+        ),
+      ]),
+    width: 180,
+    render: (row) =>
+      h(NInput, {
+        value: getRowValue(row, `custom_field::${fieldKey}`) || '',
+        size: 'small',
+        'onUpdate:value': (value) => setRowDraft(row.id, `custom_field::${fieldKey}`, value),
+        onBlur: () => saveCustomFieldValue(row, fieldKey),
+      }),
+  })),
 ])
 
 const tableScrollWidth = computed(() =>
@@ -417,9 +446,9 @@ async function openDetail(id) {
   activeTab.value = 'basic'
   detailModalVisible.value = true
   selectedAssetSummary.value = detailRows.value.find((asset) => asset.id === id) || null
-  await reloadAsset()
   hwStore.reset()
   swStore.reset()
+  await Promise.all([reloadAsset(), hwStore.fetchAll(id), swStore.fetchAll(id)])
 }
 
 async function reloadAsset() {
@@ -437,8 +466,12 @@ async function reloadAsset() {
 
 async function onCollected() {
   if (!selectedId.value) return
-  await hwStore.fetchAll(selectedId.value)
-  await swStore.fetchAll(selectedId.value)
+  await Promise.all([reloadAsset(), hwStore.fetchAll(selectedId.value), swStore.fetchAll(selectedId.value)])
+}
+
+async function reloadBasicContext() {
+  if (!selectedId.value) return
+  await Promise.all([reloadAsset(), hwStore.fetchAll(selectedId.value), swStore.fetchAll(selectedId.value)])
 }
 
 function statusLabel(status) {
@@ -495,6 +528,10 @@ function getRowValue(row, key) {
   if (draft && Object.prototype.hasOwnProperty.call(draft, key)) {
     return draft[key]
   }
+  if (isCustomFieldKey(key)) {
+    const fieldKey = key.slice('custom_field::'.length)
+    return row.custom_fields_json?.[fieldKey] ?? ''
+  }
   if (key === 'manager_id') {
     return row.manager_id ?? row.resolved_manager_id ?? null
   }
@@ -531,6 +568,21 @@ async function saveRowField(row, key, immediateValue) {
   }
 }
 
+async function saveCustomFieldValue(row, fieldKey) {
+  const key = `custom_field::${fieldKey}`
+  const nextValue = getRowValue(row, key) ?? ''
+  const currentValue = row.custom_fields_json?.[fieldKey] ?? ''
+  if (String(nextValue) === String(currentValue)) return
+
+  try {
+    await customFieldsApi.upsertByKey(row.id, fieldKey, String(nextValue))
+    applyCustomFieldUpdate(row.id, fieldKey, String(nextValue))
+    clearRowDraft(row.id, key)
+  } catch (error) {
+    message.error(error.message || '보완 메모 저장에 실패했습니다')
+  }
+}
+
 function clearRowDraft(rowId, key) {
   if (!rowDrafts.value[rowId]) return
   const nextDraft = { ...(rowDrafts.value[rowId] || {}) }
@@ -559,6 +611,77 @@ function applyAssetUpdate(id, key, value, updatedAsset) {
   if (selectedAssetSummary.value?.id === id) {
     selectedAssetSummary.value = { ...selectedAssetSummary.value, ...updatedAsset, [key]: value }
   }
+}
+
+function applyCustomFieldUpdate(id, fieldKey, fieldValue) {
+  detailRows.value = detailRows.value.map((asset) => {
+    if (asset.id !== id) return asset
+    return {
+      ...asset,
+      custom_fields_json: {
+        ...(asset.custom_fields_json || {}),
+        [fieldKey]: fieldValue,
+      },
+    }
+  })
+
+  if (selectedAsset.value?.id === id) {
+    selectedAsset.value = {
+      ...selectedAsset.value,
+      custom_fields_json: {
+        ...(selectedAsset.value.custom_fields_json || {}),
+        [fieldKey]: fieldValue,
+      },
+    }
+  }
+  if (selectedAssetSummary.value?.id === id) {
+    selectedAssetSummary.value = {
+      ...selectedAssetSummary.value,
+      custom_fields_json: {
+        ...(selectedAssetSummary.value.custom_fields_json || {}),
+        [fieldKey]: fieldValue,
+      },
+    }
+  }
+}
+
+async function addCustomFieldKey() {
+  const fieldKey = newCustomFieldKey.value.trim()
+  if (!fieldKey) return
+  try {
+    await customFieldsApi.createKey(fieldKey)
+    newCustomFieldKey.value = ''
+    await loadAssets()
+  } catch (error) {
+    message.error(error.message || '보완 메모 키 추가에 실패했습니다')
+  }
+}
+
+async function deleteCustomFieldKey(fieldKey) {
+  try {
+    await customFieldsApi.removeKey(fieldKey)
+    detailRows.value = detailRows.value.map((asset) => {
+      const nextJson = { ...(asset.custom_fields_json || {}) }
+      delete nextJson[fieldKey]
+      return { ...asset, custom_fields_json: nextJson }
+    })
+    if (selectedAsset.value) {
+      const nextJson = { ...(selectedAsset.value.custom_fields_json || {}) }
+      delete nextJson[fieldKey]
+      selectedAsset.value = { ...selectedAsset.value, custom_fields_json: nextJson }
+    }
+    if (selectedAssetSummary.value) {
+      const nextJson = { ...(selectedAssetSummary.value.custom_fields_json || {}) }
+      delete nextJson[fieldKey]
+      selectedAssetSummary.value = { ...selectedAssetSummary.value, custom_fields_json: nextJson }
+    }
+  } catch (error) {
+    message.error(error.message || '보완 메모 키 삭제에 실패했습니다')
+  }
+}
+
+function isCustomFieldKey(key) {
+  return String(key || '').startsWith('custom_field::')
 }
 
 function getManagerName(personId) {

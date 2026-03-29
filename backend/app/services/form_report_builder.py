@@ -2,7 +2,6 @@ import re
 import tempfile
 from copy import copy
 from datetime import date, datetime
-from pathlib import Path
 
 from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
@@ -16,8 +15,6 @@ from app.schemas.form_template import FormFieldInfo
 FIELD_CATALOG: list[FormFieldInfo] = [
     FormFieldInfo(data_source="asset", field="asset_code", label="자산코드", example="IC-GT1-SER-0001"),
     FormFieldInfo(data_source="asset", field="asset_name", label="자산명", example="메인DB서버"),
-    FormFieldInfo(data_source="asset", field="model_name", label="모델명", example="PowerEdge R750"),
-    FormFieldInfo(data_source="asset", field="serial_number", label="시리얼넘버"),
     FormFieldInfo(data_source="asset", field="ip_address", label="IP주소", example="10.10.1.10"),
     FormFieldInfo(data_source="asset", field="purpose", label="용도"),
     FormFieldInfo(data_source="asset", field="importance", label="중요도", example="상"),
@@ -28,30 +25,26 @@ FIELD_CATALOG: list[FormFieldInfo] = [
     FormFieldInfo(data_source="asset", field="location_name", label="설치장소명"),
     FormFieldInfo(data_source="asset", field="location_full_path", label="설치장소 경로"),
     FormFieldInfo(data_source="asset", field="equipment_type_name", label="장비종류"),
-    FormFieldInfo(data_source="asset", field="os_name", label="OS명"),
-    FormFieldInfo(data_source="asset", field="os_version", label="OS버전"),
-    FormFieldInfo(data_source="asset", field="av_name", label="백신명"),
-    FormFieldInfo(data_source="asset", field="av_version", label="백신버전"),
     FormFieldInfo(data_source="asset", field="manager_name", label="담당자명"),
-    FormFieldInfo(data_source="asset", field="manager_title", label="담당자 직급"),
-    FormFieldInfo(data_source="asset", field="manager_contact", label="담당자 연락처"),
+    FormFieldInfo(data_source="asset", field="manager_title", label="담당자직급"),
+    FormFieldInfo(data_source="asset", field="manager_contact", label="담당자연락처"),
     FormFieldInfo(data_source="hw_system", field="manufacturer", label="HW 제조사"),
-    FormFieldInfo(data_source="hw_system", field="model", label="HW 모델"),
-    FormFieldInfo(data_source="hw_system", field="serial_number", label="HW 시리얼"),
+    FormFieldInfo(data_source="hw_system", field="system_model", label="HW 모델"),
+    FormFieldInfo(data_source="hw_system", field="system_serial", label="HW 시리얼"),
     FormFieldInfo(data_source="hw_system", field="os_name", label="HW OS명"),
     FormFieldInfo(data_source="hw_system", field="bios_version", label="BIOS 버전"),
     FormFieldInfo(data_source="hw_cpu", field="name", label="CPU명", is_repeatable=True),
     FormFieldInfo(data_source="hw_cpu", field="cores", label="CPU 코어수", is_repeatable=True),
-    FormFieldInfo(data_source="hw_cpu", field="clock_mhz", label="CPU 클럭(MHz)", is_repeatable=True),
-    FormFieldInfo(data_source="hw_memory", field="slot", label="메모리 슬롯", is_repeatable=True),
-    FormFieldInfo(data_source="hw_memory", field="capacity_gb", label="메모리 용량(GB)", is_repeatable=True),
+    FormFieldInfo(data_source="hw_cpu", field="max_clock_mhz", label="CPU 클럭(MHz)", is_repeatable=True),
+    FormFieldInfo(data_source="hw_memory", field="locator", label="메모리 슬롯", is_repeatable=True),
+    FormFieldInfo(data_source="hw_memory", field="capacity_bytes", label="메모리 용량(Byte)", is_repeatable=True),
     FormFieldInfo(data_source="hw_memory", field="speed_mhz", label="메모리 속도(MHz)", is_repeatable=True),
     FormFieldInfo(data_source="hw_disk", field="model", label="디스크 모델", is_repeatable=True),
-    FormFieldInfo(data_source="hw_disk", field="capacity_gb", label="디스크 용량(GB)", is_repeatable=True),
+    FormFieldInfo(data_source="hw_disk", field="size_bytes", label="디스크 용량(Byte)", is_repeatable=True),
     FormFieldInfo(data_source="hw_disk", field="interface_type", label="디스크 인터페이스", is_repeatable=True),
-    FormFieldInfo(data_source="hw_nic", field="name", label="NIC명", is_repeatable=True),
+    FormFieldInfo(data_source="hw_nic", field="adapter_name", label="NIC명", is_repeatable=True),
     FormFieldInfo(data_source="hw_nic", field="mac_address", label="MAC주소", is_repeatable=True),
-    FormFieldInfo(data_source="hw_nic", field="ip_address", label="NIC IP", is_repeatable=True),
+    FormFieldInfo(data_source="hw_nic", field="ipv4_address", label="NIC IP", is_repeatable=True),
     FormFieldInfo(data_source="inspection", field="record_date", label="점검일자", is_repeatable=True),
     FormFieldInfo(data_source="inspection", field="check_items", label="점검항목", is_repeatable=True),
     FormFieldInfo(data_source="inspection", field="result", label="점검결과", is_repeatable=True),
@@ -62,7 +55,7 @@ FIELD_CATALOG: list[FormFieldInfo] = [
     FormFieldInfo(data_source="today", field="year", label="올해 연도", example="2026"),
     FormFieldInfo(data_source="today", field="month", label="이번 달", example="03"),
     FormFieldInfo(data_source="today", field="day", label="오늘 일", example="24"),
-    FormFieldInfo(data_source="today", field="weekday", label="오늘 요일", example="월요일"),
+    FormFieldInfo(data_source="today", field="weekday", label="오늘 요일", example="화요일"),
 ]
 
 
@@ -77,40 +70,31 @@ def parse_cell(cell_str: str) -> tuple[int, int]:
 
 async def fetch_asset_data(asset_id: int, db: AsyncSession) -> dict:
     from app.models.asset import Asset
-    from app.models.master import AntivirusCatalog, EquipmentType, GroupNode, LocationNode, OsCatalog, Person
+    from app.models.hw_info import AssetHwNic
+    from app.models.master import EquipmentType, GroupNode, LocationNode, Person
     from sqlalchemy.orm import aliased
 
     Manager = aliased(Person)
+    RepresentativeNic = aliased(AssetHwNic)
 
     stmt = (
-        select(
-            Asset,
-            GroupNode,
-            LocationNode,
-            EquipmentType,
-            OsCatalog,
-            AntivirusCatalog,
-            Manager,
-        )
+        select(Asset, GroupNode, LocationNode, EquipmentType, Manager, RepresentativeNic)
         .outerjoin(GroupNode, Asset.group_id == GroupNode.id)
         .outerjoin(LocationNode, Asset.location_id == LocationNode.id)
         .outerjoin(EquipmentType, Asset.equipment_type_id == EquipmentType.id)
-        .outerjoin(OsCatalog, Asset.os_id == OsCatalog.id)
-        .outerjoin(AntivirusCatalog, Asset.av_id == AntivirusCatalog.id)
         .outerjoin(Manager, Asset.manager_id == Manager.id)
+        .outerjoin(RepresentativeNic, Asset.representative_nic_id == RepresentativeNic.id)
         .where(Asset.id == asset_id)
     )
     row = (await db.execute(stmt)).first()
     if not row:
         return {}
 
-    asset, group, location, equipment_type, os_row, av_row, manager = row
+    asset, group, location, equipment_type, manager, representative_nic = row
     return {
         "asset_code": asset.asset_code,
         "asset_name": asset.asset_name,
-        "model_name": asset.model_name,
-        "serial_number": asset.serial_number,
-        "ip_address": asset.ip_address,
+        "ip_address": representative_nic.ipv4_address if representative_nic else "",
         "purpose": asset.purpose,
         "importance": asset.importance,
         "status": asset.status,
@@ -120,10 +104,6 @@ async def fetch_asset_data(asset_id: int, db: AsyncSession) -> dict:
         "location_name": location.name if location else "",
         "location_full_path": location.full_path if location else "",
         "equipment_type_name": equipment_type.name if equipment_type else "",
-        "os_name": os_row.name if os_row else "",
-        "os_version": os_row.version if os_row else "",
-        "av_name": av_row.name if av_row else "",
-        "av_version": av_row.version if av_row else "",
         "manager_name": manager.name if manager else "",
         "manager_title": manager.title if manager else "",
         "manager_contact": manager.contact if manager else "",
@@ -220,11 +200,7 @@ async def generate_form_report(template_id: int, asset_id: int, db: AsyncSession
     if not template:
         raise ValueError("서식을 찾을 수 없습니다")
 
-    stmt = (
-        select(ReportFormMapping)
-        .where(ReportFormMapping.template_id == template_id)
-        .order_by(ReportFormMapping.sort_order)
-    )
+    stmt = select(ReportFormMapping).where(ReportFormMapping.template_id == template_id).order_by(ReportFormMapping.sort_order)
     mappings = (await db.execute(stmt)).scalars().all()
 
     data_cache: dict = {}

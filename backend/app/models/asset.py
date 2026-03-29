@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -16,11 +16,10 @@ class Asset(Base):
     asset_code: Mapped[str] = mapped_column(String(30), unique=True, index=True)
     asset_name: Mapped[str] = mapped_column(String(100))
     purpose: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    model_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    serial_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     importance: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     install_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    ip_address: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    representative_nic_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    representative_account_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="OPERATING")
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     last_collected_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -29,9 +28,8 @@ class Asset(Base):
     group_id: Mapped[Optional[int]] = mapped_column(ForeignKey("group_nodes.id"), nullable=True)
     location_id: Mapped[Optional[int]] = mapped_column(ForeignKey("location_nodes.id"), nullable=True)
     equipment_type_id: Mapped[Optional[int]] = mapped_column(ForeignKey("equipment_types.id"), nullable=True)
-    os_id: Mapped[Optional[int]] = mapped_column(ForeignKey("os_catalog.id"), nullable=True)
-    av_id: Mapped[Optional[int]] = mapped_column(ForeignKey("antivirus_catalog.id"), nullable=True)
     manager_id: Mapped[Optional[int]] = mapped_column(ForeignKey("persons.id"), nullable=True)
+    custom_fields_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     manager: Mapped[Optional["Person"]] = relationship("Person", foreign_keys=[manager_id])
 
 

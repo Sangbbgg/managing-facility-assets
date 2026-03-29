@@ -2,9 +2,10 @@ from typing import Optional
 from sqlalchemy import select, extract
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.asset import Asset
+from app.models.hw_info import AssetHwNic
+from app.models.sw_info import AssetSwAccount
 from app.models.master import (
-    GroupNode, LocationNode, EquipmentType,
-    OsCatalog, AntivirusCatalog, Person,
+    GroupNode, LocationNode, EquipmentType, Person,
 )
 from app.models.record import (
     InspectionRecord, EventLogRecord,
@@ -25,26 +26,91 @@ async def _load_masters(db: AsyncSession):
     groups   = {r.id: r for r in (await db.execute(select(GroupNode))).scalars()}
     locs     = {r.id: r for r in (await db.execute(select(LocationNode))).scalars()}
     eq_types = {r.id: r for r in (await db.execute(select(EquipmentType))).scalars()}
-    os_map   = {r.id: r for r in (await db.execute(select(OsCatalog))).scalars()}
-    av_map   = {r.id: r for r in (await db.execute(select(AntivirusCatalog))).scalars()}
     persons  = {r.id: r for r in (await db.execute(select(Person))).scalars()}
-    return groups, locs, eq_types, os_map, av_map, persons
+    nics = {r.id: r for r in (await db.execute(select(AssetHwNic))).scalars()}
+    accounts = {r.id: r for r in (await db.execute(select(AssetSwAccount))).scalars()}
+    return groups, locs, eq_types, persons, nics, accounts
 
 
-def _asset_row(a, groups, locs, eq_types, os_map, av_map, persons) -> dict:
+def _asset_ip(asset, nics) -> str:
+    if asset.representative_nic_id and asset.representative_nic_id in nics:
+        nic = nics[asset.representative_nic_id]
+        if not nic.is_unused:
+            return nic.ipv4_address or ""
+    return ""
+
+
+def _asset_ips(asset, nics) -> list[str]:
+    return [
+        nic.ipv4_address
+        for nic in nics.values()
+        if nic.asset_id == asset.id and nic.ipv4_address and not nic.is_unused
+    ]
+
+
+def _used_ips(asset, asset_nics) -> list[str]:
+    return [
+        nic.ipv4_address
+        for nic in asset_nics
+        if nic.ipv4_address and nic.id != asset.representative_nic_id and not nic.is_unused
+    ]
+
+
+def _unused_ips(asset_nics) -> list[str]:
+    return [
+        nic.ipv4_address
+        for nic in asset_nics
+        if nic.ipv4_address and nic.is_unused
+    ]
+
+
+def _active_ips(asset, nics, asset_nics) -> list[str]:
+    values: list[str] = []
+    representative_ip = _asset_ip(asset, nics)
+    if representative_ip:
+        values.append(representative_ip)
+    values.extend(_used_ips(asset, asset_nics))
+    return values
+
+
+def _asset_row(a, groups, locs, eq_types, persons, nics, accounts) -> dict:
     grp      = groups.get(a.group_id)
     loc      = locs.get(a.location_id)
     eq       = eq_types.get(a.equipment_type_id)
-    os       = os_map.get(a.os_id)
-    av       = av_map.get(a.av_id)
     mgr      = persons.get(a.manager_id)
+    asset_nics = [nic for nic in nics.values() if nic.asset_id == a.id]
+    representative_nic = next(
+        (nic for nic in asset_nics if a.representative_nic_id and nic.id == a.representative_nic_id),
+        None,
+    )
+    used_nics = [
+        _nic_label(nic)
+        for nic in asset_nics
+        if nic.id != a.representative_nic_id and not nic.is_unused
+    ]
+    unused_nics = [
+        _nic_label(nic)
+        for nic in asset_nics
+        if nic.is_unused
+    ]
+    representative_account = accounts.get(a.representative_account_id) if a.representative_account_id else None
+    local_accounts = [
+        account.account_name
+        for account in accounts.values()
+        if account.asset_id == a.id and account.account_name and account.enabled is not False
+    ]
+    disabled_accounts = [
+        account.account_name
+        for account in accounts.values()
+        if account.asset_id == a.id and account.account_name and account.enabled is False
+    ]
     return {
         "id":                  a.id,
         "asset_code":          a.asset_code or "",
         "asset_name":          a.asset_name or "",
-        "model_name":          a.model_name or "",
-        "serial_number":       a.serial_number or "",
-        "ip_address":          a.ip_address or "",
+        "active_ip_addresses": _active_ips(a, nics, asset_nics),
+        "unused_ip_addresses": _unused_ips(asset_nics),
+        "custom_fields_json":  a.custom_fields_json or {},
         "purpose":             a.purpose or "",
         "importance":          a.importance or "",
         "status":              a.status or "",
@@ -59,17 +125,30 @@ def _asset_row(a, groups, locs, eq_types, os_map, av_map, persons) -> dict:
         "location_full_path":  loc.full_path if loc else "",
         "equipment_type_name": eq.name if eq else "",
         "equipment_type_code": eq.code if eq else "",
-        "os_name":             os.name if os else "",
-        "os_version":          (os.version or "") if os else "",
-        "os_eol_date":         _d(os.eol_date) if os else "",
-        "os_extended_eol":     _d(os.extended_eol) if os else "",
-        "av_name":             av.name if av else "",
-        "av_version":          (av.version or "") if av else "",
-        "av_support_end":      _d(av.support_end) if av else "",
+        "representative_nic_name": _nic_label(representative_nic) if representative_nic else "",
+        "used_nic_names":      used_nics,
+        "unused_nic_names":    unused_nics,
         "manager_name":        mgr.name if mgr else "",
         "manager_title":       (mgr.title or "") if mgr else "",
         "manager_contact":     (mgr.contact or "") if mgr else "",
+        "representative_account_name": representative_account.account_name if representative_account else "",
+        "local_account_names": local_accounts,
+        "disabled_account_names": disabled_accounts,
     }
+
+
+def _nic_label(nic) -> str:
+    if not nic:
+        return ""
+    return " ".join(
+        part
+        for part in [
+            nic.connection_name or nic.adapter_name,
+            f"({nic.mac_address})" if nic.mac_address else "",
+            f"- {nic.ipv4_address}" if nic.ipv4_address else "",
+        ]
+        if part
+    )
 
 
 async def fetch_asset_rows(year: int, month: Optional[int], db: AsyncSession) -> list[dict]:
@@ -82,7 +161,7 @@ async def fetch_asset_rows(year: int, month: Optional[int], db: AsyncSession) ->
 
 async def fetch_inspection_rows(year: int, month: Optional[int], db: AsyncSession, insp_type: str) -> list[dict]:
     masters = await _load_masters(db)
-    groups, locs = masters[0], masters[1]
+    groups, locs, _, _, nics, _ = masters
 
     conds = [
         InspectionRecord.inspection_type == insp_type,
@@ -113,7 +192,7 @@ async def fetch_inspection_rows(year: int, month: Optional[int], db: AsyncSessio
             "asset_name":       a.asset_name or "",
             "group_name":       grp.name if grp else "",
             "location_full_path": loc.full_path if loc else "",
-            "ip_address":       a.ip_address or "",
+            "ip_address":       _asset_ip(a, nics),
             "record_date":      _d(rec.record_date),
             "inspection_type":  rec.inspection_type,
             "result":           rec.result or "",
@@ -125,7 +204,7 @@ async def fetch_inspection_rows(year: int, month: Optional[int], db: AsyncSessio
 
 async def fetch_event_log_rows(year: int, month: Optional[int], db: AsyncSession) -> list[dict]:
     masters = await _load_masters(db)
-    groups, locs = masters[0], masters[1]
+    groups, locs, _, _, nics, _ = masters
     LEVEL_MAP = {1: "Critical", 2: "Error", 3: "Warning"}
 
     conds = [extract("year", EventLogRecord.record_date) == year]
@@ -148,7 +227,7 @@ async def fetch_event_log_rows(year: int, month: Optional[int], db: AsyncSession
             "asset_name":       a.asset_name or "",
             "group_name":       grp.name if grp else "",
             "location_full_path": loc.full_path if loc else "",
-            "ip_address":       a.ip_address or "",
+            "ip_address":       _asset_ip(a, nics),
             "record_date":      _d(rec.record_date),
             "log_type":         rec.log_type,
             "event_id":         str(rec.event_id),
@@ -160,7 +239,7 @@ async def fetch_event_log_rows(year: int, month: Optional[int], db: AsyncSession
 
 async def fetch_console_rows(year: int, month: Optional[int], db: AsyncSession) -> list[dict]:
     masters = await _load_masters(db)
-    groups, locs = masters[0], masters[1]
+    groups, locs, _, _, nics, _ = masters
 
     conds = [extract("year", ConsoleAccessRecord.access_date) == year]
     if month:
@@ -181,7 +260,7 @@ async def fetch_console_rows(year: int, month: Optional[int], db: AsyncSession) 
             "asset_name":         a.asset_name or "",
             "group_name":         grp.name if grp else "",
             "location_full_path": loc.full_path if loc else "",
-            "ip_address":         a.ip_address or "",
+            "ip_address":         _asset_ip(a, nics),
             "access_date":        _d(rec.access_date),
             "accessor":           rec.accessor or "",
             "purpose":            rec.purpose or "",
@@ -191,7 +270,7 @@ async def fetch_console_rows(year: int, month: Optional[int], db: AsyncSession) 
 
 async def fetch_seal_rows(year: int, month: Optional[int], db: AsyncSession) -> list[dict]:
     masters = await _load_masters(db)
-    groups, locs = masters[0], masters[1]
+    groups, locs, _, _, nics, _ = masters
 
     conds = [extract("year", SealRecord.record_date) == year]
     if month:
@@ -212,7 +291,7 @@ async def fetch_seal_rows(year: int, month: Optional[int], db: AsyncSession) -> 
             "asset_name":         a.asset_name or "",
             "group_name":         grp.name if grp else "",
             "location_full_path": loc.full_path if loc else "",
-            "ip_address":         a.ip_address or "",
+            "ip_address":         _asset_ip(a, nics),
             "record_date":        _d(rec.record_date),
             "seal_number":        rec.seal_number or "",
             "action":             rec.action or "",
@@ -224,7 +303,7 @@ async def fetch_seal_rows(year: int, month: Optional[int], db: AsyncSession) -> 
 
 async def fetch_password_rows(year: int, month: Optional[int], db: AsyncSession) -> list[dict]:
     masters = await _load_masters(db)
-    groups, locs = masters[0], masters[1]
+    groups, locs, _, _, nics, _ = masters
 
     conds = [extract("year", PasswordRecord.changed_date) == year]
     if month:
@@ -245,7 +324,7 @@ async def fetch_password_rows(year: int, month: Optional[int], db: AsyncSession)
             "asset_name":         a.asset_name or "",
             "group_name":         grp.name if grp else "",
             "location_full_path": loc.full_path if loc else "",
-            "ip_address":         a.ip_address or "",
+            "ip_address":         _asset_ip(a, nics),
             "account_name":       rec.account_name or "",
             "changed_date":       _d(rec.changed_date),
             "changed_by":         rec.changed_by or "",

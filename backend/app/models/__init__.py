@@ -8,10 +8,11 @@ from app.models.hw_info import (
     AssetHwSystem, AssetHwCpu, AssetHwMemory,
     AssetHwDisk, AssetHwGpu, AssetHwNic,
 )
-from app.models.sw_info import AssetSwProduct, AssetSwHotfix, AssetSwProcess
+from app.models.sw_info import AssetSwProduct, AssetSwHotfix, AssetSwProcess, AssetSwAccount
 from app.models.custom_field import AssetCustomField
 from app.models.layout import ColumnLayout
 from app.models.collect_script import CollectScript
+from app.models.collection import AssetCollectRun, AssetNetworkConnection
 from app.models.record import (
     InspectionRecord, EventLogRecord, ConsoleAccessRecord,
     SealRecord, PasswordRecord,

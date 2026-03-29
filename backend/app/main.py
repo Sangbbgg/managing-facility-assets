@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import engine, AsyncSessionLocal
+from app.core.default_collect_scripts import ensure_default_collect_scripts
 from app.core.seed import reset_and_seed_defaults
 from app.core.schema_sync import sync_schema
 from app.models import Base  # noqa: F401 — 모든 모델 등록
@@ -22,6 +23,8 @@ async def lifespan(app: FastAPI):
     if settings.RESET_AND_SEED_ON_STARTUP:
         async with AsyncSessionLocal() as session:
             await reset_and_seed_defaults(session)
+    async with AsyncSessionLocal() as session:
+        await ensure_default_collect_scripts(session)
     yield
     await engine.dispose()
 

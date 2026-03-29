@@ -20,7 +20,19 @@ export const useAssetHwStore = defineStore('assetHw', () => {
     }
   }
 
+  async function updateUnusedNics(assetId, nicIds) {
+    const result = await hardwareApi.updateUnusedNics(assetId, nicIds)
+    if (all.value.nics) {
+      const selected = new Set(result.unused_nic_ids || [])
+      all.value.nics = all.value.nics.map((nic) => ({
+        ...nic,
+        is_unused: selected.has(nic.id),
+      }))
+    }
+    return result
+  }
+
   function reset() { all.value = {} }
 
-  return { all, loading, fetchAll, removeItem, reset }
+  return { all, loading, fetchAll, removeItem, updateUnusedNics, reset }
 })

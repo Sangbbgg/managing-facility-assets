@@ -24,3 +24,11 @@ class CustomFieldRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     model_config = {"from_attributes": True}
+
+
+class CustomFieldKeyCreate(BaseModel):
+    field_key: str
+
+
+class CustomFieldValueUpsert(BaseModel):
+    field_value: str = ""

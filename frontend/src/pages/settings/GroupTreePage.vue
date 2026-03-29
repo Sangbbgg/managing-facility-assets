@@ -42,15 +42,17 @@ async function handleAdd(body)         { await store.create(body) }
 async function handleUpdate(id, body)  { await store.update(id, body) }
 
 function formatGroupLabel(node) {
-  return node.code ? `${node.name} (${node.code})` : node.name
+  const visibleCode = node.display_code || node.code
+  return visibleCode ? `${node.name} (${visibleCode})` : node.name
 }
 
 function renderGroupLabel({ option }) {
-  return option._raw.code
+  const visibleCode = option._raw.display_code || option._raw.code
+  return visibleCode
     ? h('span', [
         option._raw.name,
         ' ',
-        h('span', { style: 'color:#18a058;font-weight:700;font-size:0.85em' }, `(${option._raw.code})`),
+        h('span', { style: 'color:#18a058;font-weight:700;font-size:0.85em' }, `(${visibleCode})`),
       ])
     : option._raw.name
 }

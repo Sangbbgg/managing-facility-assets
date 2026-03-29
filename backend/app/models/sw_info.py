@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import date, datetime
 from typing import Optional
-from sqlalchemy import String, Integer, Date, DateTime, ForeignKey, JSON, func
+from sqlalchemy import Boolean, String, Integer, Date, DateTime, ForeignKey, JSON, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 
@@ -39,4 +39,15 @@ class AssetSwProcess(Base):
     pid: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     session_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     memory_kb: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    raw_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+
+
+class AssetSwAccount(Base):
+    __tablename__ = "asset_sw_accounts"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    asset_id: Mapped[int] = mapped_column(ForeignKey("assets.id"), index=True)
+    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    account_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    enabled: Mapped[Optional[bool]] = mapped_column(nullable=True)
+    comment: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     raw_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
