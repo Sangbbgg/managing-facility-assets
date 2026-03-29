@@ -11,8 +11,9 @@ Use this skill as the repository-specific source of truth for Codex work in this
 
 1. Read `references/v1-baseline.md`.
 2. Read `references/versioning-rules.md`.
-3. Read `references/v2-frontend-list-standard.md` only when the task touches frontend list or table behavior.
-4. Treat the live repository as canonical when older notes or legacy bundles conflict with the current code.
+3. Read `references/current-system-flow.md` when the task touches DB structure, backend routes/services, frontend pages/stores, or end-to-end data flow.
+4. Read `references/v2-frontend-list-standard.md` only when the task touches frontend list or table behavior.
+5. Treat the live repository as canonical when older notes or legacy bundles conflict with the current code.
 
 ## Codebase Categories
 
@@ -160,4 +161,5 @@ Use this skill as the repository-specific source of truth for Codex work in this
 
 - v1 baseline: `references/v1-baseline.md`
 - Versioning rules: `references/versioning-rules.md`
+- Current DB/backend/frontend flow: `references/current-system-flow.md`
 - v2 frontend list standard: `references/v2-frontend-list-standard.md`
