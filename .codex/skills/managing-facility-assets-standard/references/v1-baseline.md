@@ -4,20 +4,31 @@ This file defines the current repository as the official `v1` baseline.
 
 ## Definition
 
-- `v1` is the integrated repository state after the Claude-driven second revision, as it exists now.
-- `v1` is not a proposal. It is the current operating standard.
-- Existing features that were historically described as legacy `v2` or `v3` are considered part of `v1` because they are already implemented in the repository.
+- `v1` is the integrated repository state that currently exists in this repository.
+- `v1` is operational reality, not a proposal.
+- Existing implemented features belong to `v1` even if older notes once described them as future work.
 
-## Backend
+## Stack and Entrypoints
 
-- App entrypoint: `backend/app/main.py`
-- Core packages:
-  - `backend/app/models`
-  - `backend/app/schemas`
-  - `backend/app/api/routes`
-  - `backend/app/services`
+### Backend
 
-### Registered route groups in v1
+- App entry: `backend/app/main.py`
+- Database/session: `backend/app/core/database.py`
+- Schema sync: `backend/app/core/schema_sync.py`
+- Default collection scripts: `backend/app/core/default_collect_scripts.py`
+
+### Frontend
+
+- Router entry: `frontend/src/router/index.js`
+- Main page groups:
+  - `frontend/src/pages/assets`
+  - `frontend/src/pages/dashboard`
+  - `frontend/src/pages/reports`
+  - `frontend/src/pages/settings`
+
+## Backend Categories
+
+### Route Groups
 
 - `health`
 - `locations`
@@ -35,35 +46,65 @@ This file defines the current repository as the official `v1` baseline.
 - `layouts`
 - `admin`
 
-### Model domains in v1
+### Model Domains
 
-- Master data: location, group, equipment type, OS, antivirus, department, person
-- Asset core: assets, asset code sequences, asset change log
-- Records: inspection, event log, console access, seal, password
-- Detail domain: hardware, software, custom fields, layouts, collect scripts
-- Form report domain: report form templates, report form mappings
-- Report jobs: asynchronous report-related state
+- Master data:
+  - locations
+  - groups
+  - equipment types
+  - OS catalogs
+  - antivirus catalogs
+  - departments
+  - persons
+  - person-group roles
+- Asset core:
+  - assets
+  - asset code sequences
+  - asset change log
+- Hardware detail:
+  - systems
+  - CPUs
+  - memories
+  - disks
+  - GPUs
+  - NICs
+- Software/detail collection:
+  - installed products
+  - hotfixes
+  - processes
+  - local accounts
+  - network connections
+- Collection infrastructure:
+  - collect scripts
+  - collect runs
+- Custom fields and layouts
+- Report templates and form mappings
+- Record domains:
+  - inspection
+  - event log
+  - console access
+  - seal
+  - password
 
-## Frontend
+## Frontend Categories
 
-- Router entrypoint: `frontend/src/router/index.js`
-- Main page groups:
-  - `frontend/src/pages/assets`
-  - `frontend/src/pages/dashboard`
-  - `frontend/src/pages/reports`
-  - `frontend/src/pages/settings`
-
-### Important routes in v1
+### Asset Pages
 
 - `/assets`
 - `/assets/register`
 - `/assets/details`
 - `/assets/new`
 - `/assets/:id/edit`
+
+### Report Pages
+
 - `/reports`
 - `/reports/evtx`
 - `/reports/form-templates`
 - `/reports/form-report`
+
+### Settings Pages
+
 - `/settings/locations`
 - `/settings/groups`
 - `/settings/os`
@@ -73,15 +114,99 @@ This file defines the current repository as the official `v1` baseline.
 - `/settings/equipment-types`
 - `/settings/db`
 
-### State and API shape in v1
+## Current Functional Baseline
 
-- API modules live under `frontend/src/api`
-- Stores live under `frontend/src/stores`
-- Asset detail tabs currently live under `frontend/src/pages/assets/tabs`
-- Form-template UI components live under `frontend/src/components/reports`
+### Asset List
 
-## v1 Design Intent
+- Column configuration is driven by actual API-available fields.
+- Column groups are organized by source table or domain.
+- Multi-valued fields such as IPs, NICs, accounts, and custom-field-derived columns render as stacked values in a single cell.
+- Custom fields can appear as dynamic columns based on synchronized JSON values.
 
-- Keep the repository operational without requiring the old external skill bundle.
-- Treat the current codebase as the baseline standard for future Codex work.
-- Favor repository-local standards over historical naming ideals when the code already diverged.
+### Asset Detail Workspace
+
+- `/assets/details` is a review and correction workspace, not a bulk entry page.
+- The left-side list is grouped by equipment-type tabs.
+- Common fields can be edited directly in the list.
+- Detail review opens in a modal.
+
+### Asset Detail Tabs
+
+- Common info
+- Collected hardware
+- Collected software
+- Custom fields
+- Collect upload
+- Change log
+
+### Collection Upload
+
+- Collection scripts can be downloaded individually.
+- A bundle script can be downloaded for all active collection domains.
+- Upload accepts JSON and legacy ZIP flows.
+- Upload stores raw collection runs and normalized detail rows.
+
+### Current Collection Domains
+
+- Summary
+- Installed software
+- Processes
+- Local accounts
+- Network connections
+- Windows hotfixes
+
+### Reports
+
+- Report template management
+- Form-template mappings
+- HTML preview
+- XLSX generation
+- EVTX-related upload/report support
+
+## Current Data Concepts
+
+### Asset Master
+
+- `assets` stores operational master state.
+- Representative selections live in the asset master:
+  - `representative_nic_id`
+  - `representative_account_id`
+- `last_collected_at` is updated when collection data is saved.
+
+### NIC Concept
+
+- NIC detail lives in `asset_hw_nics`.
+- Representative NIC is selected by id from collected NIC rows.
+- Unused NIC is stored by `asset_hw_nics.is_unused`.
+- Asset list separates:
+  - active IPs
+  - unused IPs
+  - representative NIC
+  - used NICs
+  - unused NICs
+
+### Account Concept
+
+- Local account detail lives in `asset_sw_accounts`.
+- Representative account is selected by id from collected account rows.
+- There is no separate unused-account flag.
+- Unused-account behavior is represented by editing the collected `enabled` value.
+
+### Custom Field Concept
+
+- Structured custom field rows remain in `asset_custom_fields`.
+- `assets.custom_fields_json` mirrors them for fast list/detail rendering.
+- Global custom-field keys can be created from the detail-list workflow.
+
+### Group Code Concept
+
+- `code` is the internal unique key.
+- `display_code` is the user-facing code.
+- COM-style grouping relies on display behavior without breaking internal uniqueness.
+
+## Current Working Rules for Codex
+
+- Keep repository-local behavior authoritative over older bundles or comments.
+- When adding a new collected domain, update the script, parser, storage, API, and frontend in the same change set.
+- Keep `/assets` and `/assets/details` consistent with the current master/detail separation.
+- Prefer additive schema evolution unless the user explicitly requests cleanup or deletion.
