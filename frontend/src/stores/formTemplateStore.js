@@ -9,6 +9,7 @@ export const useFormTemplateStore = defineStore('formTemplate', () => {
   const fieldCatalog = ref([])
   const loading = ref(false)
   const previewHtml = ref('')
+  const workbookPreview = ref(null)
 
   async function fetchList(params = {}) {
     loading.value = true
@@ -73,6 +74,21 @@ export const useFormTemplateStore = defineStore('formTemplate', () => {
     }
   }
 
+  async function fetchWorkbookPreview(templateId) {
+    loading.value = true
+    try {
+      const { data } = await formTemplatesApi.workbookPreview(templateId)
+      workbookPreview.value = data
+      return data
+    } finally {
+      loading.value = false
+    }
+  }
+
+  function clearWorkbookPreview() {
+    workbookPreview.value = null
+  }
+
   async function downloadReport(templateId, assetId) {
     const response = await formTemplatesApi.generate(templateId, assetId)
     const url = window.URL.createObjectURL(new Blob([response.data]))
@@ -87,9 +103,9 @@ export const useFormTemplateStore = defineStore('formTemplate', () => {
   }
 
   return {
-    templates, currentTemplate, mappings, fieldCatalog, loading, previewHtml,
+    templates, currentTemplate, mappings, fieldCatalog, loading, previewHtml, workbookPreview,
     fetchList, fetchOne, create, update, remove,
     fetchMappings, bulkSaveMappings,
-    fetchFieldCatalog, fetchPreview, downloadReport,
+    fetchFieldCatalog, fetchPreview, fetchWorkbookPreview, clearWorkbookPreview, downloadReport,
   }
 })

@@ -37,6 +37,7 @@ HW_SW_MODELS = [
 
 
 async def parse_powershell_json(data: dict, asset_id: int, db: AsyncSession) -> dict:
+    data = _sanitize_collect_value(data)
     normalized = _normalize_collect_payload(data)
     meta = normalized["meta"]
     summary_data = normalized["summary"]
@@ -522,6 +523,7 @@ def _match_nic_signature(nic_entities: list[AssetHwNic], signature: Optional[dic
 
 
 def _normalize_collect_payload(data: dict) -> dict:
+    data = _sanitize_collect_value(data)
     meta_source = data.get("meta") or data.get("_meta") or {}
     normalized = {
         "meta": {
@@ -682,7 +684,20 @@ def _normalize_collect_payload(data: dict) -> dict:
     if "connections" in data:
         normalized["network"]["connections"] = _normalize_connections(_ensure_list(data.get("connections")))
 
-    return normalized
+    return _sanitize_collect_value(normalized)
+
+
+def _sanitize_collect_value(value):
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, list):
+        return [_sanitize_collect_value(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            _sanitize_collect_value(key): _sanitize_collect_value(item)
+            for key, item in value.items()
+        }
+    return value
 
 
 def _normalize_connections(items: list[dict]) -> list[dict]:

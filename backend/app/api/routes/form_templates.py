@@ -124,6 +124,18 @@ async def get_template(template_id: int, db: AsyncSession = Depends(get_db)):
     return FormTemplateRead.model_validate(t)
 
 
+@router.get("/{template_id}/file")
+async def download_template_file(template_id: int, db: AsyncSession = Depends(get_db)):
+    t = await db.get(ReportFormTemplate, template_id)
+    if not t:
+        raise HTTPException(404, "template not found")
+    return FileResponse(
+        path=t.file_path,
+        filename=t.file_name,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
 @router.patch("/{template_id}", response_model=FormTemplateRead)
 async def update_template(
     template_id: int,
@@ -241,3 +253,13 @@ async def analyze_template(template_id: int, db: AsyncSession = Depends(get_db))
     if not t:
         raise HTTPException(404)
     return await analyze_template_structure(t.file_path)
+
+
+@router.get("/{template_id}/workbook-preview")
+async def preview_template_workbook(template_id: int, db: AsyncSession = Depends(get_db)):
+    from app.services.form_report_preview import generate_template_workbook_preview
+
+    t = await db.get(ReportFormTemplate, template_id)
+    if not t:
+        raise HTTPException(404, "template not found")
+    return await generate_template_workbook_preview(t.file_path)

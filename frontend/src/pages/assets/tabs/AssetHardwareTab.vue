@@ -4,32 +4,56 @@
       <n-collapse v-if="hasData" accordion>
         <n-collapse-item title="시스템 정보" name="systems">
           <ListHeader title="시스템 정보" :count="systems.length" />
-          <n-data-table :columns="systemColumns" :data="systems" size="small" :max-height="260" />
+          <div class="table-scroll-wrap">
+            <div class="table-scroll-inner" style="width: 1600px;">
+              <n-data-table :columns="systemColumns" :data="systems" size="small" :max-height="260" :scroll-x="1600" />
+            </div>
+          </div>
         </n-collapse-item>
 
         <n-collapse-item title="CPU 정보" name="cpus">
           <ListHeader title="CPU 정보" :count="cpus.length" />
-          <n-data-table :columns="cpuColumns" :data="cpus" size="small" :max-height="260" />
+          <div class="table-scroll-wrap">
+            <div class="table-scroll-inner" style="width: 1300px;">
+              <n-data-table :columns="cpuColumns" :data="cpus" size="small" :max-height="260" :scroll-x="1300" />
+            </div>
+          </div>
         </n-collapse-item>
 
         <n-collapse-item title="메모리 정보" name="memories">
           <ListHeader title="메모리 정보" :count="memories.length" />
-          <n-data-table :columns="memoryColumns" :data="memories" size="small" :max-height="300" />
+          <div class="table-scroll-wrap">
+            <div class="table-scroll-inner" style="width: 1300px;">
+              <n-data-table :columns="memoryColumns" :data="memories" size="small" :max-height="300" :scroll-x="1300" />
+            </div>
+          </div>
         </n-collapse-item>
 
         <n-collapse-item title="디스크 정보" name="disks">
           <ListHeader title="디스크 정보" :count="disks.length" />
-          <n-data-table :columns="diskColumns" :data="disks" size="small" :max-height="300" />
+          <div class="table-scroll-wrap">
+            <div class="table-scroll-inner" style="width: 1300px;">
+              <n-data-table :columns="diskColumns" :data="disks" size="small" :max-height="300" :scroll-x="1300" />
+            </div>
+          </div>
         </n-collapse-item>
 
         <n-collapse-item title="GPU 정보" name="gpus">
           <ListHeader title="GPU 정보" :count="gpus.length" />
-          <n-data-table :columns="gpuColumns" :data="gpus" size="small" :max-height="260" />
+          <div class="table-scroll-wrap">
+            <div class="table-scroll-inner" style="width: 1100px;">
+              <n-data-table :columns="gpuColumns" :data="gpus" size="small" :max-height="260" :scroll-x="1100" />
+            </div>
+          </div>
         </n-collapse-item>
 
         <n-collapse-item title="네트워크 어댑터" name="nics">
           <ListHeader title="네트워크 어댑터" :count="nics.length" />
-          <n-data-table :columns="nicColumns" :data="nics" size="small" :max-height="320" />
+          <div class="table-scroll-wrap">
+            <div class="table-scroll-inner" style="width: 1700px;">
+              <n-data-table :columns="nicColumns" :data="nics" size="small" :max-height="320" :scroll-x="1700" />
+            </div>
+          </div>
         </n-collapse-item>
       </n-collapse>
 
@@ -162,3 +186,15 @@ onMounted(() => {
   if (props.assetId) hwStore.fetchAll(props.assetId)
 })
 </script>
+
+<style scoped>
+.table-scroll-wrap {
+  overflow-x: auto;
+  padding-bottom: 4px;
+  width: 100%;
+}
+
+.table-scroll-inner {
+  max-width: none;
+}
+</style>

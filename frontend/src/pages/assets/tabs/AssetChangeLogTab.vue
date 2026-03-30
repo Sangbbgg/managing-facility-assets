@@ -1,14 +1,19 @@
 <template>
   <div>
     <ListHeader title="변경 이력" :count="logs.length" />
-    <n-data-table
-      :columns="columns"
-      :data="logs"
-      :loading="loading"
-      size="small"
-      :max-height="420"
-      :pagination="{ pageSize: 20 }"
-    />
+    <div class="table-scroll-wrap">
+      <div class="table-scroll-inner" style="width: 980px;">
+        <n-data-table
+          :columns="columns"
+          :data="logs"
+          :loading="loading"
+          size="small"
+          :max-height="420"
+          :pagination="{ pageSize: 20 }"
+          :scroll-x="980"
+        />
+      </div>
+    </div>
     <n-empty v-if="!loading && !logs.length" description="변경 이력이 없습니다." style="margin-top: 24px" />
   </div>
 </template>
@@ -47,3 +52,15 @@ async function load(id) {
 
 watch(() => props.assetId, load, { immediate: true })
 </script>
+
+<style scoped>
+.table-scroll-wrap {
+  overflow-x: auto;
+  padding-bottom: 4px;
+  width: 100%;
+}
+
+.table-scroll-inner {
+  max-width: none;
+}
+</style>

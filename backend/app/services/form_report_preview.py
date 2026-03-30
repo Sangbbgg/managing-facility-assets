@@ -1,3 +1,4 @@
+from html import escape
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 from sqlalchemy import select
@@ -48,6 +49,52 @@ def _cell_style_css(cell) -> str:
             parts.append("border:1px solid #C4A882")
     parts.append("padding:6px 8px")
     return ";".join(parts)
+
+
+def _sheet_to_html(ws, cell_values: dict[tuple[int, int], str] | None = None) -> str:
+    cell_values = cell_values or {}
+
+    merged = {}
+    for mr in ws.merged_cells.ranges:
+        min_r, min_c = mr.min_row, mr.min_col
+        max_r, max_c = mr.max_row, mr.max_col
+        merged[(min_r, min_c)] = (max_r - min_r + 1, max_c - min_c + 1)
+        for r in range(min_r, max_r + 1):
+            for c in range(min_c, max_c + 1):
+                if (r, c) != (min_r, min_c):
+                    merged[(r, c)] = None
+
+    max_row = ws.max_row or 1
+    max_col = ws.max_column or 1
+
+    html_parts = [
+        '<table style="border-collapse:collapse;table-layout:fixed;min-width:max-content;'
+        'font-family:\'Malgun Gothic\',sans-serif;font-size:12px;background:#fff;">'
+    ]
+
+    for r in range(1, max_row + 1):
+        html_parts.append("<tr>")
+        for c in range(1, max_col + 1):
+            merge_info = merged.get((r, c), "no_merge")
+            if merge_info is None:
+                continue
+            cell = ws.cell(r, c)
+            css = _cell_style_css(cell)
+            attrs = f'style="{css};min-width:72px;max-width:240px;white-space:pre-wrap;word-break:break-word;"'
+            if isinstance(merge_info, tuple):
+                rowspan, colspan = merge_info
+                if rowspan > 1:
+                    attrs += f' rowspan="{rowspan}"'
+                if colspan > 1:
+                    attrs += f' colspan="{colspan}"'
+            value = cell_values.get((r, c))
+            if value is None:
+                value = cell.value if cell.value is not None else ""
+            html_parts.append(f"<td {attrs}>{escape(str(value))}</td>")
+        html_parts.append("</tr>")
+
+    html_parts.append("</table>")
+    return "\n".join(html_parts)
 
 
 async def generate_preview_html(
@@ -108,47 +155,7 @@ async def generate_preview_html(
             for m, base_row, base_col in group:
                 cell_values[(base_row + i, base_col)] = format_value(item.get(m.field, ""), m.format)
 
-    merged = {}
-    for mr in ws.merged_cells.ranges:
-        min_r, min_c = mr.min_row, mr.min_col
-        max_r, max_c = mr.max_row, mr.max_col
-        merged[(min_r, min_c)] = (max_r - min_r + 1, max_c - min_c + 1)
-        for r in range(min_r, max_r + 1):
-            for c in range(min_c, max_c + 1):
-                if (r, c) != (min_r, min_c):
-                    merged[(r, c)] = None
-
-    max_row = ws.max_row or 1
-    max_col = ws.max_column or 1
-
-    html_parts = [
-        '<table style="border-collapse:collapse;width:100%;max-width:900px;'
-        'margin:0 auto;font-family:\'Malgun Gothic\',sans-serif;font-size:12px;">'
-    ]
-
-    for r in range(1, max_row + 1):
-        html_parts.append("<tr>")
-        for c in range(1, max_col + 1):
-            merge_info = merged.get((r, c), "no_merge")
-            if merge_info is None:
-                continue
-            cell = ws.cell(r, c)
-            css = _cell_style_css(cell)
-            attrs = f'style="{css}"'
-            if isinstance(merge_info, tuple):
-                rowspan, colspan = merge_info
-                if rowspan > 1:
-                    attrs += f' rowspan="{rowspan}"'
-                if colspan > 1:
-                    attrs += f' colspan="{colspan}"'
-            value = cell_values.get((r, c))
-            if value is None:
-                value = cell.value if cell.value is not None else ""
-            html_parts.append(f"<td {attrs}>{value}</td>")
-        html_parts.append("</tr>")
-
-    html_parts.append("</table>")
-    return "\n".join(html_parts)
+    return _sheet_to_html(ws, cell_values)
 
 
 async def analyze_template_structure(file_path: str) -> dict:
@@ -181,4 +188,23 @@ async def analyze_template_structure(file_path: str) -> dict:
         "max_col": ws.max_column,
         "merged_cells": merged_cells,
         "label_cells": label_cells[:200],
+    }
+
+
+async def generate_template_workbook_preview(file_path: str) -> dict:
+    wb = load_workbook(file_path)
+    sheets = []
+
+    for ws in wb.worksheets:
+        sheets.append({
+            "name": ws.title,
+            "max_row": ws.max_row or 1,
+            "max_col": ws.max_column or 1,
+            "html": _sheet_to_html(ws),
+        })
+
+    return {
+        "active_sheet": wb.active.title if wb.worksheets else None,
+        "sheet_count": len(sheets),
+        "sheets": sheets,
     }

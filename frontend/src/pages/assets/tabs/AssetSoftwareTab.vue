@@ -4,57 +4,82 @@
       <n-tabs type="line" size="small">
         <n-tab-pane name="products" tab="설치 프로그램">
           <ListHeader title="설치 프로그램 목록" :count="products.length" />
-          <n-data-table
-            :columns="productColumns"
-            :data="products"
-            size="small"
-            :max-height="380"
-            :pagination="{ pageSize: 20 }"
-          />
+          <div class="table-scroll-wrap">
+            <div class="table-scroll-inner" style="width: 900px;">
+              <n-data-table
+                :columns="productColumns"
+                :data="products"
+                size="small"
+                :max-height="380"
+                :pagination="{ pageSize: 20 }"
+                :scroll-x="900"
+              />
+            </div>
+          </div>
         </n-tab-pane>
 
         <n-tab-pane name="hotfixes" tab="Windows 업데이트">
           <ListHeader title="Hotfix 목록" :count="hotfixes.length" />
-          <n-data-table
-            :columns="hotfixColumns"
-            :data="hotfixes"
-            size="small"
-            :max-height="380"
-            :pagination="{ pageSize: 20 }"
-          />
+          <div class="table-scroll-wrap">
+            <div class="table-scroll-inner" style="width: 760px;">
+              <n-data-table
+                :columns="hotfixColumns"
+                :data="hotfixes"
+                size="small"
+                :max-height="380"
+                :pagination="{ pageSize: 20 }"
+                :scroll-x="760"
+              />
+            </div>
+          </div>
         </n-tab-pane>
 
         <n-tab-pane name="processes" tab="실행 프로세스">
           <ListHeader title="프로세스 목록" :count="processes.length" />
-          <n-data-table
-            :columns="processColumns"
-            :data="processes"
-            size="small"
-            :max-height="380"
-            :pagination="{ pageSize: 20 }"
-          />
+          <div class="table-scroll-wrap">
+            <div class="table-scroll-inner" style="width: 760px;">
+              <n-data-table
+                :columns="processColumns"
+                :data="processes"
+                size="small"
+                :max-height="380"
+                :pagination="{ pageSize: 20 }"
+                :scroll-x="760"
+              />
+            </div>
+          </div>
         </n-tab-pane>
 
         <n-tab-pane name="accounts" tab="로컬 계정">
           <ListHeader title="로컬 계정 목록" :count="accounts.length" />
-          <n-data-table
-            :columns="accountColumns"
-            :data="accounts"
-            size="small"
-            :max-height="380"
-            :pagination="{ pageSize: 20 }"
-          />
+          <div class="table-scroll-wrap">
+            <div class="table-scroll-inner" style="width: 940px;">
+              <n-data-table
+                :columns="accountColumns"
+                :data="accounts"
+                size="small"
+                :max-height="380"
+                :pagination="{ pageSize: 20 }"
+                :scroll-x="940"
+              />
+            </div>
+          </div>
         </n-tab-pane>
 
         <n-tab-pane name="connections" tab="네트워크 연결">
           <ListHeader title="netstat 연결 목록" :count="connections.length" />
-          <n-data-table
-            :columns="connectionColumns"
-            :data="connections"
-            size="small"
-            :max-height="380"
-            :pagination="{ pageSize: 20 }"
-          />
+          <div class="table-scroll-wrap">
+            <div class="table-scroll-inner" style="width: 980px;">
+              <n-data-table
+                :columns="connectionColumns"
+                :data="connections"
+                size="small"
+                :max-height="380"
+                :pagination="{ pageSize: 20 }"
+                :scroll-x="980"
+              />
+            </div>
+          </div>
         </n-tab-pane>
       </n-tabs>
 
@@ -123,7 +148,7 @@ const accountColumns = [
       h(
         NTag,
         { type: row.enabled === false ? 'warning' : 'success', size: 'small' },
-        { default: () => (row.enabled === false ? '미사용' : '활성') }
+        { default: () => (row.enabled === false ? '비활성' : '활성') }
       ),
   },
   { title: '주석', key: 'comment', width: 320, render: (row) => row.comment || '-' },
@@ -150,3 +175,15 @@ watch(
   { immediate: true }
 )
 </script>
+
+<style scoped>
+.table-scroll-wrap {
+  overflow-x: auto;
+  padding-bottom: 4px;
+  width: 100%;
+}
+
+.table-scroll-inner {
+  max-width: none;
+}
+</style>

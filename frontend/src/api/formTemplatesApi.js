@@ -7,6 +7,11 @@ export default {
   get(id) {
     return client.get(`/api/form-templates/${id}`)
   },
+  file(id) {
+    return client.get(`/api/form-templates/${id}/file`, {
+      responseType: 'arraybuffer',
+    })
+  },
   create(formData) {
     return client.post('/api/form-templates', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -26,6 +31,9 @@ export default {
   },
   analyze(templateId) {
     return client.get(`/api/form-templates/${templateId}/analyze`)
+  },
+  workbookPreview(templateId) {
+    return client.get(`/api/form-templates/${templateId}/workbook-preview`)
   },
   fieldCatalog() {
     return client.get('/api/form-templates/field-catalog')
