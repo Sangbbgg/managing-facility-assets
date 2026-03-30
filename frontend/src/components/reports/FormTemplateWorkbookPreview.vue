@@ -5,7 +5,7 @@
         <div>
           <div class="preview-title">템플릿 프리뷰</div>
           <div v-if="template" class="preview-subtitle">
-            {{ template.name }} · 실제 워크북 화면으로 표시합니다.
+            {{ template.name }} · 셀을 클릭해 실제 DB 필드를 매핑할 수 있습니다.
           </div>
           <div v-else class="preview-subtitle">
             왼쪽에서 템플릿을 선택하면 실제 시트 구조를 여기서 볼 수 있습니다.
@@ -17,12 +17,9 @@
     <n-spin :show="loading">
       <div v-if="template" class="preview-body">
         <div class="sheet-meta">
-          <span v-if="sheetNames.length">
-            시트 {{ sheetNames.length }}개
-          </span>
-          <span v-if="activeSheetLabel">
-            · 현재 {{ activeSheetLabel }}
-          </span>
+          <span v-if="sheetNames.length">시트 {{ sheetNames.length }}개</span>
+          <span v-if="activeSheetLabel"> · 현재 {{ activeSheetLabel }}</span>
+          <span v-if="selectedCellLabel"> · 선택 {{ selectedCellLabel }}</span>
         </div>
 
         <div ref="spreadsheetHost" class="sheet-canvas" />
@@ -50,27 +47,59 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  mappings: {
+    type: Array,
+    default: () => [],
+  },
+  selectedCell: {
+    type: Object,
+    default: null,
+  },
 })
+
+const emit = defineEmits(['select-cell'])
 
 const spreadsheetHost = ref(null)
 const loading = ref(false)
 const workbookInstance = ref(null)
+const workbookBinary = ref(null)
 const workbookSummary = ref({ sheetNames: [], activeSheet: null })
 
 const sheetNames = computed(() => workbookSummary.value.sheetNames)
 const activeSheetLabel = computed(() => workbookSummary.value.activeSheet)
+const selectedCellLabel = computed(() => {
+  if (!props.selectedCell?.cell) {
+    return ''
+  }
+  return props.selectedCell.sheetName
+    ? `${props.selectedCell.sheetName} / ${props.selectedCell.cell}`
+    : props.selectedCell.cell
+})
 
 watch(
   () => props.template?.id,
   async (templateId) => {
     if (!templateId) {
       destroySpreadsheet()
+      workbookBinary.value = null
       workbookSummary.value = { sheetNames: [], activeSheet: null }
       return
     }
     await loadWorkbook(templateId)
   },
   { immediate: true },
+)
+
+watch(
+  () => [
+    props.mappings.map((item) => `${item.sheet_name || ''}:${item.cell}:${item.field}:${item.data_source}`).join('|'),
+  ],
+  async () => {
+    if (!workbookBinary.value || !props.template?.id) {
+      return
+    }
+    await renderWorkbook()
+  },
 )
 
 onBeforeUnmount(() => {
@@ -80,37 +109,56 @@ onBeforeUnmount(() => {
 async function loadWorkbook(templateId) {
   loading.value = true
   try {
-    destroySpreadsheet()
     const response = await formTemplatesApi.file(templateId)
-    const workbook = XLSX.read(response.data, {
-      type: 'array',
-      cellStyles: true,
-      cellFormula: true,
-      cellNF: true,
-      cellText: true,
-    })
-    const worksheets = workbook.SheetNames.map((sheetName) => buildWorksheet(workbook.Sheets[sheetName], sheetName))
-    workbookSummary.value = {
-      sheetNames: workbook.SheetNames,
-      activeSheet: workbook.SheetNames[0] || null,
-    }
-    await nextTick()
-    workbookInstance.value = jspreadsheet(spreadsheetHost.value, {
-      worksheets,
-      tabs: true,
-      toolbar: false,
-      contextMenu: false,
-      fullscreen: false,
-      onopenworksheet: (worksheet) => {
-        workbookSummary.value = {
-          ...workbookSummary.value,
-          activeSheet: worksheet?.options?.worksheetName || null,
-        }
-      },
-    })
+    workbookBinary.value = response.data
+    await renderWorkbook()
   } finally {
     loading.value = false
   }
+}
+
+async function renderWorkbook() {
+  if (!workbookBinary.value) {
+    return
+  }
+
+  destroySpreadsheet()
+  const workbook = XLSX.read(workbookBinary.value, {
+    type: 'array',
+    cellStyles: true,
+    cellFormula: true,
+    cellNF: true,
+    cellText: true,
+  })
+
+  const worksheets = workbook.SheetNames.map((sheetName) =>
+    buildWorksheet(workbook.Sheets[sheetName], sheetName),
+  )
+
+  workbookSummary.value = {
+    sheetNames: workbook.SheetNames,
+    activeSheet: props.selectedCell?.sheetName || workbookSummary.value.activeSheet || workbook.SheetNames[0] || null,
+  }
+
+  await nextTick()
+  workbookInstance.value = jspreadsheet(spreadsheetHost.value, {
+    worksheets,
+    tabs: true,
+    toolbar: false,
+    contextMenu: false,
+    fullscreen: false,
+    onopenworksheet: (worksheet) => {
+      workbookSummary.value = {
+        ...workbookSummary.value,
+        activeSheet: worksheet?.options?.worksheetName || null,
+      }
+    },
+    onselection: (worksheet, x1, y1) => {
+      const sheetName = worksheet?.options?.worksheetName || workbookSummary.value.activeSheet
+      const cell = XLSX.utils.encode_cell({ r: y1, c: x1 })
+      emit('select-cell', { sheetName, cell })
+    },
+  })
 }
 
 function buildWorksheet(sheet, sheetName) {
@@ -119,6 +167,11 @@ function buildWorksheet(sheet, sheetName) {
   const colCount = Math.max(range.e.c + 1, 1)
   const data = []
   const style = {}
+  const mappedCells = new Set(
+    props.mappings
+      .filter((item) => (item.sheet_name || '') === sheetName)
+      .map((item) => item.cell),
+  )
 
   for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
     const row = []
@@ -126,9 +179,25 @@ function buildWorksheet(sheet, sheetName) {
       const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: colIndex })
       const cell = sheet[cellAddress]
       row.push(formatCellValue(cell))
-      const css = cellToCss(cell)
-      if (css) {
-        style[cellAddress] = css
+
+      const cssParts = []
+      const cellCss = cellToCss(cell)
+      if (cellCss) {
+        cssParts.push(cellCss)
+      }
+      if (mappedCells.has(cellAddress)) {
+        cssParts.push('box-shadow: inset 0 0 0 2px #22c55e')
+        cssParts.push('background-image: linear-gradient(180deg, rgba(34, 197, 94, 0.08), rgba(34, 197, 94, 0.02))')
+      }
+      if (
+        props.selectedCell?.sheetName === sheetName
+        && props.selectedCell?.cell === cellAddress
+      ) {
+        cssParts.push('box-shadow: inset 0 0 0 2px #2563eb')
+        cssParts.push('background-image: linear-gradient(180deg, rgba(37, 99, 235, 0.12), rgba(37, 99, 235, 0.04))')
+      }
+      if (cssParts.length) {
+        style[cellAddress] = cssParts.join(';')
       }
     }
     data.push(row)
@@ -217,34 +286,61 @@ function cellToCss(cell) {
     'white-space: pre-wrap',
     'word-break: break-word',
   ]
+  const style = cell.s
 
-  const fillColor = normalizeColor(cell.s.fill?.fgColor || cell.s.fill?.bgColor)
+  const fillColor = normalizeColor(style.fill?.fgColor || style.fill?.bgColor)
   if (fillColor) {
     parts.push(`background-color:${fillColor}`)
   }
 
-  const fontColor = normalizeColor(cell.s.font?.color)
+  const fontColor = normalizeColor(style.font?.color)
   if (fontColor) {
     parts.push(`color:${fontColor}`)
   }
 
-  if (cell.s.font?.bold) {
+  if (style.font?.name) {
+    parts.push(`font-family:${normalizeFontFamily(style.font.name)}`)
+  }
+  if (style.font?.bold) {
     parts.push('font-weight:700')
   }
-  if (cell.s.font?.italic) {
+  if (style.font?.italic) {
     parts.push('font-style:italic')
   }
-  if (cell.s.font?.sz) {
-    parts.push(`font-size:${Math.max(Math.round(cell.s.font.sz), 11)}px`)
+  const textDecorations = []
+  if (style.font?.underline) {
+    textDecorations.push('underline')
   }
-  if (cell.s.alignment?.horizontal) {
-    parts.push(`text-align:${cell.s.alignment.horizontal}`)
+  if (style.font?.strike) {
+    textDecorations.push('line-through')
   }
-  if (cell.s.alignment?.vertical) {
-    parts.push(`vertical-align:${cell.s.alignment.vertical}`)
+  if (textDecorations.length) {
+    parts.push(`text-decoration:${textDecorations.join(' ')}`)
+  }
+  if (style.font?.sz) {
+    parts.push(`font-size:${Math.max(Math.round(style.font.sz), 11)}px`)
   }
 
-  const border = buildBorderCss(cell.s.border)
+  if (style.alignment?.horizontal) {
+    parts.push(`text-align:${normalizeHorizontalAlign(style.alignment.horizontal)}`)
+  }
+  if (style.alignment?.vertical) {
+    parts.push(`vertical-align:${normalizeVerticalAlign(style.alignment.vertical)}`)
+  }
+  if (style.alignment?.wrapText) {
+    parts.push('white-space:pre-wrap')
+  } else {
+    parts.push('white-space:nowrap')
+  }
+  if (style.alignment?.textRotation != null && Number(style.alignment.textRotation) !== 0) {
+    parts.push(`transform:rotate(${normalizeRotation(style.alignment.textRotation)}deg)`)
+    parts.push('transform-origin:center center')
+  }
+  if (style.alignment?.indent) {
+    parts.push(`padding-left:${8 + Number(style.alignment.indent) * 10}px`)
+  }
+
+  const border = buildBorderCss(style.border)
   if (border) {
     parts.push(border)
   }
@@ -256,28 +352,47 @@ function buildBorderCss(border) {
   if (!border) {
     return ''
   }
-
-  const color = normalizeColor(
-    border.top?.color
-    || border.bottom?.color
-    || border.left?.color
-    || border.right?.color,
-  ) || '#cbd5e1'
-
   const segments = []
-  if (border.top?.style) {
-    segments.push(`border-top:1px solid ${color}`)
-  }
-  if (border.bottom?.style) {
-    segments.push(`border-bottom:1px solid ${color}`)
-  }
-  if (border.left?.style) {
-    segments.push(`border-left:1px solid ${color}`)
-  }
-  if (border.right?.style) {
-    segments.push(`border-right:1px solid ${color}`)
-  }
+  pushBorderSegment(segments, 'top', border.top)
+  pushBorderSegment(segments, 'bottom', border.bottom)
+  pushBorderSegment(segments, 'left', border.left)
+  pushBorderSegment(segments, 'right', border.right)
   return segments.join(';')
+}
+
+function pushBorderSegment(segments, side, borderPart) {
+  if (!borderPart?.style) {
+    return
+  }
+  const color = normalizeColor(borderPart.color) || '#94a3b8'
+  const { width, style } = mapBorderStyle(borderPart.style)
+  segments.push(`border-${side}:${width}px ${style} ${color}`)
+}
+
+function mapBorderStyle(style) {
+  switch (style) {
+    case 'medium':
+      return { width: 2, style: 'solid' }
+    case 'thick':
+      return { width: 3, style: 'solid' }
+    case 'dashed':
+    case 'mediumDashed':
+      return { width: 1, style: 'dashed' }
+    case 'dotted':
+      return { width: 1, style: 'dotted' }
+    case 'double':
+      return { width: 3, style: 'double' }
+    case 'hair':
+      return { width: 1, style: 'dotted' }
+    case 'slantDashDot':
+    case 'dashDot':
+    case 'mediumDashDot':
+    case 'dashDotDot':
+    case 'mediumDashDotDot':
+      return { width: 1, style: 'dashed' }
+    default:
+      return { width: 1, style: 'solid' }
+  }
 }
 
 function normalizeColor(color) {
@@ -291,6 +406,38 @@ function normalizeColor(color) {
     return `#${String(color.rgb).slice(-6)}`
   }
   return ''
+}
+
+function normalizeFontFamily(name) {
+  return `'${String(name).replace(/'/g, "\\'")}', 'Malgun Gothic', sans-serif`
+}
+
+function normalizeHorizontalAlign(value) {
+  if (value === 'centerContinuous' || value === 'distributed') {
+    return 'center'
+  }
+  if (value === 'fill' || value === 'justify') {
+    return 'justify'
+  }
+  return value
+}
+
+function normalizeVerticalAlign(value) {
+  if (value === 'center' || value === 'distributed' || value === 'justify') {
+    return 'middle'
+  }
+  return value
+}
+
+function normalizeRotation(value) {
+  const number = Number(value)
+  if (Number.isNaN(number)) {
+    return 0
+  }
+  if (number > 90) {
+    return number - 180
+  }
+  return number
 }
 
 function resolveColumnWidth(col) {

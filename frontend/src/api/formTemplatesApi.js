@@ -4,6 +4,18 @@ export default {
   list(params = {}) {
     return client.get('/api/form-templates', { params })
   },
+  listFolders() {
+    return client.get('/api/form-templates/folders')
+  },
+  createFolder(body) {
+    return client.post('/api/form-templates/folders', body)
+  },
+  updateFolder(id, body) {
+    return client.patch(`/api/form-templates/folders/${id}`, body)
+  },
+  removeFolder(id) {
+    return client.delete(`/api/form-templates/folders/${id}`)
+  },
   get(id) {
     return client.get(`/api/form-templates/${id}`)
   },

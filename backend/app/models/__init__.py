@@ -17,5 +17,5 @@ from app.models.record import (
     InspectionRecord, EventLogRecord, ConsoleAccessRecord,
     SealRecord, PasswordRecord,
 )
-from app.models.form_template import ReportFormTemplate, ReportFormMapping  # v3
+from app.models.form_template import ReportFormTemplateFolder, ReportFormTemplate, ReportFormMapping  # v3
 from app.models.report import ReportTemplate

@@ -211,11 +211,11 @@ async def generate_form_report(template_id: int, asset_id: int, db: AsyncSession
         return data_cache[source]
 
     wb = load_workbook(template.file_path)
-    ws = wb.active
 
     for mapping in mappings:
         if mapping.repeat_direction:
             continue
+        ws = wb[mapping.sheet_name] if mapping.sheet_name and mapping.sheet_name in wb.sheetnames else wb.active
         row, col = parse_cell(mapping.cell)
         if mapping.data_source == "static":
             ws.cell(row, col).value = mapping.field
@@ -229,16 +229,17 @@ async def generate_form_report(template_id: int, asset_id: int, db: AsyncSession
         if not mapping.repeat_direction:
             continue
         row, col = parse_cell(mapping.cell)
-        key = (mapping.data_source, row)
+        key = (mapping.sheet_name or "", mapping.data_source, row)
         repeat_groups.setdefault(key, []).append((mapping, row, col))
 
-    for (data_source, _start_row), group in repeat_groups.items():
+    for (_sheet_name, data_source, _start_row), group in repeat_groups.items():
         data = await get_data(data_source)
         if not isinstance(data, list):
             continue
         max_rows = group[0][0].repeat_max_rows or 50
         for index, item in enumerate(data[:max_rows]):
             for mapping, base_row, base_col in group:
+                ws = wb[mapping.sheet_name] if mapping.sheet_name and mapping.sheet_name in wb.sheetnames else wb.active
                 target_row = base_row + index
                 value = item.get(mapping.field, "")
                 ws.cell(target_row, base_col).value = format_value(value, mapping.format)

@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import formTemplatesApi from '@/api/formTemplatesApi'
 
 export const useFormTemplateStore = defineStore('formTemplate', () => {
+  const folders = ref([])
   const templates = ref([])
   const currentTemplate = ref(null)
   const mappings = ref([])
@@ -21,6 +22,12 @@ export const useFormTemplateStore = defineStore('formTemplate', () => {
     }
   }
 
+  async function fetchFolders() {
+    const { data } = await formTemplatesApi.listFolders()
+    folders.value = data
+    return data
+  }
+
   async function fetchOne(id) {
     const { data } = await formTemplatesApi.get(id)
     currentTemplate.value = data
@@ -29,19 +36,36 @@ export const useFormTemplateStore = defineStore('formTemplate', () => {
 
   async function create(formData) {
     const { data } = await formTemplatesApi.create(formData)
-    await fetchList()
+    await Promise.all([fetchList(), fetchFolders()])
     return data
   }
 
   async function update(id, body) {
     const { data } = await formTemplatesApi.update(id, body)
-    await fetchList()
+    await Promise.all([fetchList(), fetchFolders()])
     return data
   }
 
   async function remove(id) {
     await formTemplatesApi.remove(id)
-    await fetchList()
+    await Promise.all([fetchList(), fetchFolders()])
+  }
+
+  async function createFolder(body) {
+    const { data } = await formTemplatesApi.createFolder(body)
+    await fetchFolders()
+    return data
+  }
+
+  async function updateFolder(id, body) {
+    const { data } = await formTemplatesApi.updateFolder(id, body)
+    await Promise.all([fetchFolders(), fetchList()])
+    return data
+  }
+
+  async function removeFolder(id) {
+    await formTemplatesApi.removeFolder(id)
+    await Promise.all([fetchFolders(), fetchList()])
   }
 
   async function fetchMappings(templateId) {
@@ -103,8 +127,9 @@ export const useFormTemplateStore = defineStore('formTemplate', () => {
   }
 
   return {
-    templates, currentTemplate, mappings, fieldCatalog, loading, previewHtml, workbookPreview,
-    fetchList, fetchOne, create, update, remove,
+    folders, templates, currentTemplate, mappings, fieldCatalog, loading, previewHtml, workbookPreview,
+    fetchFolders, fetchList, fetchOne, create, update, remove,
+    createFolder, updateFolder, removeFolder,
     fetchMappings, bulkSaveMappings,
     fetchFieldCatalog, fetchPreview, fetchWorkbookPreview, clearWorkbookPreview, downloadReport,
   }

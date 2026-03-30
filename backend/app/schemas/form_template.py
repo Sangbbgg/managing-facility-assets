@@ -9,13 +9,32 @@ class FormTemplateCreate(BaseModel):
     name: str
     description: Optional[str] = None
     category: str = "general"
+    folder_id: Optional[int] = None
 
 
 class FormTemplateUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     category: Optional[str] = None
+    folder_id: Optional[int] = None
     is_active: Optional[bool] = None
+
+
+class FormTemplateFolderCreate(BaseModel):
+    name: str
+
+
+class FormTemplateFolderUpdate(BaseModel):
+    name: str
+
+
+class FormTemplateFolderRead(BaseModel):
+    id: int
+    name: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class FormTemplateRead(BaseModel):
@@ -24,6 +43,9 @@ class FormTemplateRead(BaseModel):
     description: Optional[str]
     file_name: str
     category: str
+    folder_id: Optional[int] = None
+    folder_name: Optional[str] = None
+    folder_path: str
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -35,6 +57,7 @@ class FormTemplateRead(BaseModel):
 # --- Mapping ---
 
 class FormMappingCreate(BaseModel):
+    sheet_name: Optional[str] = None
     cell: str
     data_source: str
     field: str
@@ -46,6 +69,7 @@ class FormMappingCreate(BaseModel):
 
 
 class FormMappingUpdate(BaseModel):
+    sheet_name: Optional[str] = None
     cell: Optional[str] = None
     data_source: Optional[str] = None
     field: Optional[str] = None
@@ -59,6 +83,7 @@ class FormMappingUpdate(BaseModel):
 class FormMappingRead(BaseModel):
     id: int
     template_id: int
+    sheet_name: Optional[str]
     cell: str
     data_source: str
     field: str
