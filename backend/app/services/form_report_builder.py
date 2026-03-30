@@ -2,75 +2,142 @@ import re
 import tempfile
 from copy import copy
 from datetime import date, datetime
+from typing import Any
 
 from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.asset import Asset
+from app.models.collection import AssetCollectRun, AssetNetworkConnection
 from app.models.form_template import ReportFormMapping, ReportFormTemplate
+from app.models.hw_info import AssetHwCpu, AssetHwDisk, AssetHwGpu, AssetHwMemory, AssetHwNic, AssetHwSystem
+from app.models.record import ConsoleAccessRecord, EventLogRecord, InspectionRecord, PasswordRecord, SealRecord
+from app.models.sw_info import AssetSwAccount, AssetSwHotfix, AssetSwProcess, AssetSwProduct
 from app.schemas.form_template import FormFieldInfo
 
 
-FIELD_CATALOG: list[FormFieldInfo] = [
-    FormFieldInfo(data_source="asset", field="asset_code", label="자산코드", example="IC-GT1-SER-0001"),
-    FormFieldInfo(data_source="asset", field="asset_name", label="자산명", example="메인DB서버"),
-    FormFieldInfo(data_source="asset", field="ip_address", label="IP주소", example="10.10.1.10"),
-    FormFieldInfo(data_source="asset", field="purpose", label="용도"),
-    FormFieldInfo(data_source="asset", field="importance", label="중요도", example="상"),
-    FormFieldInfo(data_source="asset", field="status", label="상태", example="OPERATING"),
-    FormFieldInfo(data_source="asset", field="install_date", label="설치일자"),
-    FormFieldInfo(data_source="asset", field="group_name", label="운영그룹명"),
-    FormFieldInfo(data_source="asset", field="group_full_path", label="운영그룹 경로"),
-    FormFieldInfo(data_source="asset", field="location_name", label="설치장소명"),
-    FormFieldInfo(data_source="asset", field="location_full_path", label="설치장소 경로"),
-    FormFieldInfo(data_source="asset", field="equipment_type_name", label="장비종류"),
-    FormFieldInfo(data_source="asset", field="manager_name", label="담당자명"),
-    FormFieldInfo(data_source="asset", field="manager_title", label="담당자직급"),
-    FormFieldInfo(data_source="asset", field="manager_contact", label="담당자연락처"),
-    FormFieldInfo(data_source="hw_system", field="manufacturer", label="HW 제조사"),
-    FormFieldInfo(data_source="hw_system", field="system_model", label="HW 모델"),
-    FormFieldInfo(data_source="hw_system", field="system_serial", label="HW 시리얼"),
-    FormFieldInfo(data_source="hw_system", field="os_name", label="HW OS명"),
-    FormFieldInfo(data_source="hw_system", field="bios_version", label="BIOS 버전"),
-    FormFieldInfo(data_source="hw_cpu", field="name", label="CPU명", is_repeatable=True),
-    FormFieldInfo(data_source="hw_cpu", field="cores", label="CPU 코어수", is_repeatable=True),
-    FormFieldInfo(data_source="hw_cpu", field="max_clock_mhz", label="CPU 클럭(MHz)", is_repeatable=True),
-    FormFieldInfo(data_source="hw_memory", field="locator", label="메모리 슬롯", is_repeatable=True),
-    FormFieldInfo(data_source="hw_memory", field="capacity_bytes", label="메모리 용량(Byte)", is_repeatable=True),
-    FormFieldInfo(data_source="hw_memory", field="speed_mhz", label="메모리 속도(MHz)", is_repeatable=True),
-    FormFieldInfo(data_source="hw_disk", field="model", label="디스크 모델", is_repeatable=True),
-    FormFieldInfo(data_source="hw_disk", field="size_bytes", label="디스크 용량(Byte)", is_repeatable=True),
-    FormFieldInfo(data_source="hw_disk", field="interface_type", label="디스크 인터페이스", is_repeatable=True),
-    FormFieldInfo(data_source="hw_nic", field="adapter_name", label="NIC명", is_repeatable=True),
-    FormFieldInfo(data_source="hw_nic", field="mac_address", label="MAC주소", is_repeatable=True),
-    FormFieldInfo(data_source="hw_nic", field="ipv4_address", label="NIC IP", is_repeatable=True),
-    FormFieldInfo(data_source="inspection", field="record_date", label="점검일자", is_repeatable=True),
-    FormFieldInfo(data_source="inspection", field="check_items", label="점검항목", is_repeatable=True),
-    FormFieldInfo(data_source="inspection", field="result", label="점검결과", is_repeatable=True),
-    FormFieldInfo(data_source="inspection", field="special_notes", label="특이사항", is_repeatable=True),
-    FormFieldInfo(data_source="inspection", field="inspector", label="점검자", is_repeatable=True),
-    FormFieldInfo(data_source="static", field="(직접입력)", label="고정 텍스트", example="신인천빛드림본부"),
-    FormFieldInfo(data_source="today", field="date", label="오늘 날짜", example="2026년 03월 24일"),
-    FormFieldInfo(data_source="today", field="year", label="올해 연도", example="2026"),
-    FormFieldInfo(data_source="today", field="month", label="이번 달", example="03"),
-    FormFieldInfo(data_source="today", field="day", label="오늘 일", example="24"),
-    FormFieldInfo(data_source="today", field="weekday", label="오늘 요일", example="화요일"),
+_EXCLUDED_FIELDS = {
+    "id",
+    "asset_id",
+    "parent_id",
+    "group_id",
+    "location_id",
+    "equipment_type_id",
+    "manager_id",
+    "dept_id",
+    "representative_nic_id",
+    "representative_account_id",
+    "is_deleted",
+    "depth",
+    "code",
+    "key",
+    "raw_json",
+    "raw_payload",
+    "raw_csproduct",
+    "raw_os",
+    "raw_systeminfo",
+}
+
+_ASSET_DERIVED_FIELDS = [
+    ("group_name", "Group Name"),
+    ("group_full_path", "Group Full Path"),
+    ("location_name", "Location Name"),
+    ("location_full_path", "Location Full Path"),
+    ("equipment_type_name", "Equipment Type Name"),
+    ("manager_name", "Manager Name"),
+    ("manager_title", "Manager Title"),
+    ("manager_contact", "Manager Contact"),
+    ("ip_address", "Representative IP"),
 ]
+
+_DATA_SOURCE_MODELS: dict[str, tuple[Any, bool, Any | None]] = {
+    "hw_system": (AssetHwSystem, False, None),
+    "hw_cpu": (AssetHwCpu, True, AssetHwCpu.collected_at.desc()),
+    "hw_memory": (AssetHwMemory, True, AssetHwMemory.collected_at.desc()),
+    "hw_disk": (AssetHwDisk, True, AssetHwDisk.collected_at.desc()),
+    "hw_gpu": (AssetHwGpu, True, AssetHwGpu.collected_at.desc()),
+    "hw_nic": (AssetHwNic, True, AssetHwNic.collected_at.desc()),
+    "sw_product": (AssetSwProduct, True, AssetSwProduct.collected_at.desc()),
+    "sw_hotfix": (AssetSwHotfix, True, AssetSwHotfix.installed_on.desc()),
+    "sw_process": (AssetSwProcess, True, AssetSwProcess.collected_at.desc()),
+    "sw_account": (AssetSwAccount, True, AssetSwAccount.collected_at.desc()),
+    "network_connection": (AssetNetworkConnection, True, AssetNetworkConnection.collected_at.desc()),
+    "collect_run": (AssetCollectRun, True, AssetCollectRun.collected_at.desc()),
+    "inspection": (InspectionRecord, True, InspectionRecord.record_date.desc()),
+    "event_log": (EventLogRecord, True, EventLogRecord.record_date.desc()),
+    "console_access": (ConsoleAccessRecord, True, ConsoleAccessRecord.access_date.desc()),
+    "seal": (SealRecord, True, SealRecord.record_date.desc()),
+    "password": (PasswordRecord, True, PasswordRecord.changed_date.desc()),
+}
+
+
+def _humanize_label(field: str) -> str:
+    return field.replace("_", " ").title()
+
+
+def _build_field_catalog() -> list[FormFieldInfo]:
+    catalog: list[FormFieldInfo] = []
+
+    for column in Asset.__table__.columns:
+        if column.name in _EXCLUDED_FIELDS:
+            continue
+        catalog.append(
+            FormFieldInfo(
+                data_source="asset",
+                field=column.name,
+                label=_humanize_label(column.name),
+            )
+        )
+
+    for field_name, label in _ASSET_DERIVED_FIELDS:
+        catalog.append(
+            FormFieldInfo(
+                data_source="asset",
+                field=field_name,
+                label=label,
+            )
+        )
+
+    for data_source, (model, is_repeatable, _order_by) in _DATA_SOURCE_MODELS.items():
+        for column in model.__table__.columns:
+            if column.name in _EXCLUDED_FIELDS:
+                continue
+            catalog.append(
+                FormFieldInfo(
+                    data_source=data_source,
+                    field=column.name,
+                    label=_humanize_label(column.name),
+                    is_repeatable=is_repeatable,
+                )
+            )
+
+    catalog.extend([
+        FormFieldInfo(data_source="static", field="(direct-input)", label="Static Text", example="No issue found"),
+        FormFieldInfo(data_source="today", field="date", label="Today Date", example="2026-03-30"),
+        FormFieldInfo(data_source="today", field="year", label="Year", example="2026"),
+        FormFieldInfo(data_source="today", field="month", label="Month", example="03"),
+        FormFieldInfo(data_source="today", field="day", label="Day", example="30"),
+        FormFieldInfo(data_source="today", field="weekday", label="Weekday", example="Monday"),
+    ])
+
+    return catalog
+
+
+FIELD_CATALOG: list[FormFieldInfo] = _build_field_catalog()
 
 
 def parse_cell(cell_str: str) -> tuple[int, int]:
     matched = re.match(r"([A-Z]+)(\d+)", cell_str.upper())
     if not matched:
-        raise ValueError(f"잘못된 셀 주소: {cell_str}")
+        raise ValueError(f"invalid cell address: {cell_str}")
     col = column_index_from_string(matched.group(1))
     row = int(matched.group(2))
     return row, col
 
 
 async def fetch_asset_data(asset_id: int, db: AsyncSession) -> dict:
-    from app.models.asset import Asset
-    from app.models.hw_info import AssetHwNic
     from app.models.master import EquipmentType, GroupNode, LocationNode, Person
     from sqlalchemy.orm import aliased
 
@@ -91,14 +158,13 @@ async def fetch_asset_data(asset_id: int, db: AsyncSession) -> dict:
         return {}
 
     asset, group, location, equipment_type, manager, representative_nic = row
-    return {
-        "asset_code": asset.asset_code,
-        "asset_name": asset.asset_name,
+    data = {
+        column.name: getattr(asset, column.name)
+        for column in Asset.__table__.columns
+        if column.name not in _EXCLUDED_FIELDS
+    }
+    data.update({
         "ip_address": representative_nic.ipv4_address if representative_nic else "",
-        "purpose": asset.purpose,
-        "importance": asset.importance,
-        "status": asset.status,
-        "install_date": str(asset.install_date) if asset.install_date else "",
         "group_name": group.name if group else "",
         "group_full_path": group.full_path if group else "",
         "location_name": location.name if location else "",
@@ -107,7 +173,32 @@ async def fetch_asset_data(asset_id: int, db: AsyncSession) -> dict:
         "manager_name": manager.name if manager else "",
         "manager_title": manager.title if manager else "",
         "manager_contact": manager.contact if manager else "",
+    })
+    return data
+
+
+def _serialize_model_row(row: Any) -> dict:
+    return {
+        column.name: getattr(row, column.name)
+        for column in row.__table__.columns
+        if column.name not in _EXCLUDED_FIELDS
     }
+
+
+async def _fetch_single_row(model: Any, asset_id: int, db: AsyncSession) -> dict:
+    stmt = select(model).where(model.asset_id == asset_id).limit(1)
+    row = (await db.execute(stmt)).scalar_one_or_none()
+    if not row:
+        return {}
+    return _serialize_model_row(row)
+
+
+async def _fetch_multi_rows(model: Any, asset_id: int, db: AsyncSession, order_by: Any | None = None) -> list[dict]:
+    stmt = select(model).where(model.asset_id == asset_id)
+    if order_by is not None:
+        stmt = stmt.order_by(order_by)
+    rows = (await db.execute(stmt)).scalars().all()
+    return [_serialize_model_row(row) for row in rows]
 
 
 async def fetch_data_source(data_source: str, asset_id: int, db: AsyncSession):
@@ -115,59 +206,24 @@ async def fetch_data_source(data_source: str, asset_id: int, db: AsyncSession):
         return await fetch_asset_data(asset_id, db)
 
     if data_source == "hw_system":
-        from app.models.hw_info import AssetHwSystem
+        return await _fetch_single_row(AssetHwSystem, asset_id, db)
 
-        stmt = select(AssetHwSystem).where(AssetHwSystem.asset_id == asset_id).limit(1)
-        row = (await db.execute(stmt)).scalar_one_or_none()
-        if not row:
-            return {}
-        return {c.name: getattr(row, c.name) for c in AssetHwSystem.__table__.columns if c.name not in ("id", "asset_id")}
-
-    if data_source.startswith("hw_"):
-        model_map = {
-            "hw_cpu": "AssetHwCpu",
-            "hw_memory": "AssetHwMemory",
-            "hw_disk": "AssetHwDisk",
-            "hw_gpu": "AssetHwGpu",
-            "hw_nic": "AssetHwNic",
-        }
-        import app.models.hw_info as hw_mod
-
-        model = getattr(hw_mod, model_map[data_source])
-        stmt = select(model).where(model.asset_id == asset_id)
-        rows = (await db.execute(stmt)).scalars().all()
-        return [
-            {c.name: getattr(r, c.name) for c in model.__table__.columns if c.name not in ("id", "asset_id")}
-            for r in rows
-        ]
-
-    if data_source == "inspection":
-        from app.models.record import InspectionRecord
-
-        stmt = (
-            select(InspectionRecord)
-            .where(InspectionRecord.asset_id == asset_id)
-            .order_by(InspectionRecord.record_date.desc())
-            .limit(20)
-        )
-        rows = (await db.execute(stmt)).scalars().all()
-        return [
-            {
-                "record_date": str(r.record_date),
-                "inspection_type": r.inspection_type,
-                "check_items": str(r.check_items) if r.check_items else "",
-                "result": r.result or "",
-                "special_notes": r.special_notes or "",
-                "inspector": r.inspector or "",
-            }
-            for r in rows
-        ]
+    if data_source in _DATA_SOURCE_MODELS:
+        model, is_repeatable, order_by = _DATA_SOURCE_MODELS[data_source]
+        if is_repeatable:
+            rows = await _fetch_multi_rows(model, asset_id, db, order_by)
+            if data_source == "inspection":
+                for row in rows:
+                    if row.get("check_items") is not None:
+                        row["check_items"] = str(row["check_items"])
+            return rows
+        return await _fetch_single_row(model, asset_id, db)
 
     if data_source == "today":
         now = datetime.now()
-        weekdays = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
+        weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         return {
-            "date": now.strftime("%Y년 %m월 %d일"),
+            "date": now.strftime("%Y-%m-%d"),
             "year": str(now.year),
             "month": f"{now.month:02d}",
             "day": f"{now.day:02d}",
@@ -183,10 +239,16 @@ async def fetch_data_source(data_source: str, asset_id: int, db: AsyncSession):
 def format_value(value, fmt) -> str:
     if value is None:
         return ""
+    if isinstance(value, dict):
+        return str(value)
     if fmt is None:
         return str(value)
     if "YYYY" in fmt and isinstance(value, (date, datetime)):
-        return fmt.replace("YYYY", str(value.year)).replace("MM", f"{value.month:02d}").replace("DD", f"{value.day:02d}")
+        return (
+            fmt.replace("YYYY", str(value.year))
+            .replace("MM", f"{value.month:02d}")
+            .replace("DD", f"{value.day:02d}")
+        )
     if "#" in fmt:
         try:
             return f"{float(value):,.0f}"
@@ -198,12 +260,16 @@ def format_value(value, fmt) -> str:
 async def generate_form_report(template_id: int, asset_id: int, db: AsyncSession) -> tuple[str, str]:
     template = await db.get(ReportFormTemplate, template_id)
     if not template:
-        raise ValueError("서식을 찾을 수 없습니다")
+        raise ValueError("form template not found")
 
-    stmt = select(ReportFormMapping).where(ReportFormMapping.template_id == template_id).order_by(ReportFormMapping.sort_order)
+    stmt = (
+        select(ReportFormMapping)
+        .where(ReportFormMapping.template_id == template_id)
+        .order_by(ReportFormMapping.sort_order)
+    )
     mappings = (await db.execute(stmt)).scalars().all()
 
-    data_cache: dict = {}
+    data_cache: dict[str, Any] = {}
 
     async def get_data(source: str):
         if source not in data_cache:
@@ -224,7 +290,7 @@ async def generate_form_report(template_id: int, asset_id: int, db: AsyncSession
         if isinstance(data, dict):
             ws.cell(row, col).value = format_value(data.get(mapping.field, ""), mapping.format)
 
-    repeat_groups: dict = {}
+    repeat_groups: dict[tuple[str, str, int], list[tuple[ReportFormMapping, int, int]]] = {}
     for mapping in mappings:
         if not mapping.repeat_direction:
             continue

@@ -4,12 +4,12 @@
       <div>
         <h2 class="page-title">양식 템플릿 관리</h2>
         <p class="page-description">
-          왼쪽에서 템플릿을 관리하고, 오른쪽에서 실제 엑셀 화면처럼 시트를 확인할 수 있습니다.
+          왼쪽에서 템플릿을 관리하고, 오른쪽에서 실제 시트 미리보기를 확인할 수 있습니다.
         </p>
       </div>
       <div class="header-actions">
         <n-button quaternary @click="togglePreview">
-          {{ showPreview ? '프리뷰 접기' : '프리뷰 펼치기' }}
+          {{ showPreview ? '프리뷰 숨기기' : '프리뷰 펼치기' }}
         </n-button>
       </div>
     </div>
@@ -23,86 +23,6 @@
             @edit="openEditModal"
             @select="handleSelect"
           />
-        </n-card>
-
-        <n-card class="mapping-card" :bordered="false">
-          <template #header>
-            <div class="mapping-header">
-              <div>
-                <div class="mapping-title">셀 매핑</div>
-                <div class="mapping-subtitle">
-                  {{ selectedCellLabel || '프리뷰에서 셀을 클릭하세요.' }}
-                </div>
-              </div>
-              <n-button
-                type="primary"
-                size="small"
-                :disabled="!canSaveMapping"
-                :loading="mappingSaving"
-                @click="saveSelectedMapping"
-              >
-                매핑 저장
-              </n-button>
-            </div>
-          </template>
-
-          <div v-if="selectedTemplate" class="mapping-body">
-            <n-form label-placement="top">
-              <n-form-item label="시트 / 셀">
-                <n-input :value="selectedCellLabel" readonly placeholder="프리뷰에서 셀을 선택하세요." />
-              </n-form-item>
-              <n-form-item label="데이터 소스">
-                <n-select
-                  v-model:value="mappingForm.data_source"
-                  :options="sourceOptions"
-                  placeholder="데이터 소스를 선택하세요"
-                  @update:value="handleSourceChange"
-                />
-              </n-form-item>
-              <n-form-item label="필드">
-                <n-select
-                  v-model:value="mappingForm.field"
-                  :options="fieldOptions"
-                  filterable
-                  placeholder="필드를 선택하세요"
-                />
-              </n-form-item>
-              <n-form-item label="포맷">
-                <n-input v-model:value="mappingForm.format" placeholder="예: YYYY년 MM월 DD일" />
-              </n-form-item>
-              <n-form-item label="반복 데이터">
-                <n-switch v-model:value="mappingForm.is_repeat" />
-              </n-form-item>
-              <n-form-item v-if="mappingForm.is_repeat" label="최대 행 수">
-                <n-input-number v-model:value="mappingForm.repeat_max_rows" :min="1" :max="200" />
-              </n-form-item>
-            </n-form>
-
-            <div class="mapping-list-header">
-              <span>저장된 매핑 {{ currentSheetMappings.length }}개</span>
-            </div>
-            <n-scrollbar style="max-height: 260px">
-              <div v-if="currentSheetMappings.length" class="mapping-list">
-                <button
-                  v-for="mapping in currentSheetMappings"
-                  :key="mapping.id || `${mapping.sheet_name}-${mapping.cell}`"
-                  type="button"
-                  class="mapping-item"
-                  :class="{ active: isSelectedMapping(mapping) }"
-                  @click="selectExistingMapping(mapping)"
-                >
-                  <div class="mapping-item-main">
-                    <strong>{{ mapping.cell }}</strong>
-                    <span>{{ mapping.data_source }}.{{ mapping.field }}</span>
-                    <span v-if="mapping.repeat_direction" class="mapping-repeat">반복</span>
-                  </div>
-                  <n-button size="tiny" type="error" @click.stop="removeMapping(mapping)">삭제</n-button>
-                </button>
-              </div>
-              <n-empty v-else size="small" description="현재 시트에는 저장된 매핑이 없습니다." />
-            </n-scrollbar>
-          </div>
-          <n-empty v-else size="small" description="템플릿을 선택하면 매핑 편집이 열립니다." />
         </n-card>
       </div>
 
@@ -143,9 +63,9 @@
         <n-form-item v-if="editingTemplate" label="활성 상태">
           <n-switch v-model:value="templateForm.is_active" />
         </n-form-item>
-        <n-form-item v-else label="엑셀 파일">
+        <n-form-item v-else label="양식 파일">
           <n-upload accept=".xlsx,.xls" :max="1" @change="handleFileChange">
-            <n-button>엑셀 파일 선택</n-button>
+            <n-button>양식 파일 선택</n-button>
           </n-upload>
         </n-form-item>
       </n-form>
@@ -164,6 +84,109 @@
         </div>
       </template>
     </n-modal>
+
+    <n-modal
+      v-model:show="showMappingModal"
+      preset="card"
+      title="셀 매핑"
+      style="width: 760px; max-width: 96vw"
+      :mask-closable="true"
+    >
+      <div v-if="selectedTemplate" class="mapping-body">
+        <div class="mapping-header">
+          <div>
+            <div class="mapping-title">{{ selectedCellLabel || '셀을 선택해 주세요' }}</div>
+            <div class="mapping-subtitle">
+              프리뷰에서 선택한 셀을 팝업에서 바로 매핑할 수 있습니다.
+            </div>
+          </div>
+          <n-button
+            type="primary"
+            :disabled="!canSaveMapping"
+            :loading="mappingSaving"
+            @click="saveSelectedMapping"
+          >
+            매핑 저장
+          </n-button>
+        </div>
+
+        <div class="mapping-layout">
+          <n-form label-placement="top" class="mapping-form">
+            <n-form-item label="시트 / 셀">
+              <n-input
+                :value="selectedCellLabel"
+                readonly
+                placeholder="프리뷰에서 셀을 선택해 주세요"
+              />
+            </n-form-item>
+            <n-form-item label="데이터 소스">
+              <n-select
+                v-model:value="mappingForm.data_source"
+                :options="sourceOptions"
+                placeholder="데이터 소스를 선택해 주세요"
+                @update:value="handleSourceChange"
+              />
+            </n-form-item>
+            <n-form-item label="필드">
+              <n-select
+                v-model:value="mappingForm.field"
+                :options="fieldOptions"
+                filterable
+                placeholder="필드를 선택해 주세요"
+              />
+            </n-form-item>
+            <n-form-item label="포맷">
+              <n-input v-model:value="mappingForm.format" placeholder="예: YYYY-MM-DD" />
+            </n-form-item>
+            <n-form-item label="반복 데이터">
+              <n-switch v-model:value="mappingForm.is_repeat" />
+            </n-form-item>
+            <n-form-item v-if="mappingForm.is_repeat" label="최대 행 수">
+              <n-input-number v-model:value="mappingForm.repeat_max_rows" :min="1" :max="200" />
+            </n-form-item>
+          </n-form>
+
+          <div class="mapping-side">
+            <div class="mapping-list-header">
+              현재 시트 매핑 {{ currentSheetMappings.length }}개
+            </div>
+            <n-scrollbar style="max-height: 360px">
+              <div v-if="currentSheetMappings.length" class="mapping-list">
+                <button
+                  v-for="mapping in currentSheetMappings"
+                  :key="mapping.id || `${mapping.sheet_name}-${mapping.cell}`"
+                  type="button"
+                  class="mapping-item"
+                  :class="{ active: isSelectedMapping(mapping) }"
+                  @click="selectExistingMapping(mapping)"
+                >
+                  <div class="mapping-item-main">
+                    <strong>{{ mapping.cell }}</strong>
+                    <span>{{ mapping.data_source }}.{{ mapping.field }}</span>
+                    <span v-if="mapping.repeat_direction" class="mapping-repeat">반복</span>
+                  </div>
+                  <n-button size="tiny" type="error" @click.stop="removeMapping(mapping)">
+                    삭제
+                  </n-button>
+                </button>
+              </div>
+              <n-empty
+                v-else
+                size="small"
+                description="현재 시트에는 저장된 매핑이 없습니다."
+              />
+            </n-scrollbar>
+          </div>
+        </div>
+      </div>
+      <n-empty v-else size="small" description="템플릿을 선택하면 셀 매핑을 편집할 수 있습니다." />
+
+      <template #footer>
+        <div class="modal-footer">
+          <n-button @click="closeMappingModal">닫기</n-button>
+        </div>
+      </template>
+    </n-modal>
   </PageShell>
 </template>
 
@@ -179,6 +202,7 @@ const store = useFormTemplateStore()
 const message = useMessage()
 
 const showTemplateModal = ref(false)
+const showMappingModal = ref(false)
 const saving = ref(false)
 const selectedTemplateId = ref(null)
 const editingTemplate = ref(null)
@@ -301,6 +325,10 @@ function resetMappingForm() {
   mappingForm.value = emptyMappingForm()
 }
 
+function closeMappingModal() {
+  showMappingModal.value = false
+}
+
 function togglePreview() {
   showPreview.value = !showPreview.value
 }
@@ -308,6 +336,7 @@ function togglePreview() {
 async function handleSelect(template) {
   selectedTemplateId.value = template?.id || null
   selectedCell.value = null
+  closeMappingModal()
   resetMappingForm()
   if (!template?.id) {
     store.clearWorkbookPreview()
@@ -342,6 +371,7 @@ function handleSelectCell(cellInfo) {
   } else {
     resetMappingForm()
   }
+  showMappingModal.value = true
 }
 
 function isSelectedMapping(mapping) {
@@ -363,6 +393,7 @@ function selectExistingMapping(mapping) {
     is_repeat: !!mapping.repeat_direction,
     repeat_max_rows: mapping.repeat_max_rows || 10,
   }
+  showMappingModal.value = true
 }
 
 async function saveSelectedMapping() {
@@ -391,6 +422,7 @@ async function saveSelectedMapping() {
     })
     await store.bulkSaveMappings(selectedTemplateId.value, nextMappings)
     message.success('셀 매핑을 저장했습니다.')
+    closeMappingModal()
   } catch (error) {
     message.error(`매핑 저장에 실패했습니다: ${error.message || ''}`)
   } finally {
@@ -461,6 +493,7 @@ onMounted(async () => {
 
 watch(selectedTemplateId, () => {
   selectedCell.value = null
+  closeMappingModal()
   resetMappingForm()
 })
 </script>
@@ -494,19 +527,18 @@ watch(selectedTemplateId, () => {
 
 .page-grid {
   display: grid;
-  grid-template-columns: minmax(340px, 420px) minmax(0, 1fr);
+  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
   gap: 18px;
   align-items: stretch;
   transition: grid-template-columns 0.2s ease;
 }
 
 .page-grid.collapsed {
-  grid-template-columns: minmax(340px, 420px);
+  grid-template-columns: minmax(320px, 380px);
 }
 
 .left-column {
-  display: grid;
-  gap: 18px;
+  min-width: 0;
 }
 
 .pane-card {
@@ -517,10 +549,6 @@ watch(selectedTemplateId, () => {
 .pane-left {
   overflow: hidden;
   width: 100%;
-}
-
-.mapping-card {
-  background: #fff;
 }
 
 .mapping-header {
@@ -545,6 +573,22 @@ watch(selectedTemplateId, () => {
 .mapping-body {
   display: grid;
   gap: 14px;
+}
+
+.mapping-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 18px;
+  align-items: start;
+}
+
+.mapping-form {
+  min-width: 0;
+}
+
+.mapping-side {
+  display: grid;
+  gap: 10px;
 }
 
 .mapping-list-header {
@@ -611,6 +655,10 @@ watch(selectedTemplateId, () => {
 
   .pane-card {
     min-height: auto;
+  }
+
+  .mapping-layout {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -64,6 +64,7 @@ const loading = ref(false)
 const workbookInstance = ref(null)
 const workbookBinary = ref(null)
 const workbookSummary = ref({ sheetNames: [], activeSheet: null })
+const pendingUserSelection = ref(false)
 
 const sheetNames = computed(() => workbookSummary.value.sheetNames)
 const activeSheetLabel = computed(() => workbookSummary.value.activeSheet)
@@ -103,6 +104,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  detachPointerIntent()
   destroySpreadsheet()
 })
 
@@ -141,6 +143,7 @@ async function renderWorkbook() {
   }
 
   await nextTick()
+  attachPointerIntent()
   workbookInstance.value = jspreadsheet(spreadsheetHost.value, {
     worksheets,
     tabs: true,
@@ -154,6 +157,10 @@ async function renderWorkbook() {
       }
     },
     onselection: (worksheet, x1, y1) => {
+      if (!pendingUserSelection.value) {
+        return
+      }
+      pendingUserSelection.value = false
       const sheetName = worksheet?.options?.worksheetName || workbookSummary.value.activeSheet
       const cell = XLSX.utils.encode_cell({ r: y1, c: x1 })
       emit('select-cell', { sheetName, cell })
@@ -470,12 +477,32 @@ function resolveRowHeight(row) {
 }
 
 function destroySpreadsheet() {
+  pendingUserSelection.value = false
+  detachPointerIntent()
   if (workbookInstance.value?.destroy) {
     workbookInstance.value.destroy()
   } else if (spreadsheetHost.value) {
     spreadsheetHost.value.innerHTML = ''
   }
   workbookInstance.value = null
+}
+
+function handlePointerIntent() {
+  pendingUserSelection.value = true
+}
+
+function attachPointerIntent() {
+  if (!spreadsheetHost.value) {
+    return
+  }
+  spreadsheetHost.value.addEventListener('pointerdown', handlePointerIntent)
+}
+
+function detachPointerIntent() {
+  if (!spreadsheetHost.value) {
+    return
+  }
+  spreadsheetHost.value.removeEventListener('pointerdown', handlePointerIntent)
 }
 </script>
 

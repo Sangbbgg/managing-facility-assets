@@ -12,6 +12,21 @@ export const useFormTemplateStore = defineStore('formTemplate', () => {
   const previewHtml = ref('')
   const workbookPreview = ref(null)
 
+  function syncTemplateMappingCount(templateId, mappingCount) {
+    templates.value = templates.value.map((template) =>
+      template.id === templateId
+        ? { ...template, mapping_count: mappingCount }
+        : template,
+    )
+
+    if (currentTemplate.value?.id === templateId) {
+      currentTemplate.value = {
+        ...currentTemplate.value,
+        mapping_count: mappingCount,
+      }
+    }
+  }
+
   async function fetchList(params = {}) {
     loading.value = true
     try {
@@ -77,6 +92,7 @@ export const useFormTemplateStore = defineStore('formTemplate', () => {
   async function bulkSaveMappings(templateId, items) {
     const { data } = await formTemplatesApi.bulkSaveMappings(templateId, items)
     mappings.value = data
+    syncTemplateMappingCount(templateId, data.length)
     return data
   }
 
