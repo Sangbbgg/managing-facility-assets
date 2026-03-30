@@ -77,6 +77,7 @@ class Department(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True)
     code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    persons: Mapped[list["Person"]] = relationship("Person", back_populates="department")
 
 
 class Person(Base):
@@ -86,6 +87,8 @@ class Person(Base):
     name: Mapped[str] = mapped_column(String(50))
     title: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     contact: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    dept_id: Mapped[Optional[int]] = mapped_column(ForeignKey("departments.id"), nullable=True)
+    department: Mapped[Optional["Department"]] = relationship("Department", back_populates="persons")
     group_roles: Mapped[list["PersonGroupRole"]] = relationship(
         "PersonGroupRole",
         back_populates="person",

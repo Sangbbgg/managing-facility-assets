@@ -25,6 +25,8 @@ def _serialize_person(row: Person) -> dict:
         "name": row.name,
         "title": row.title,
         "contact": row.contact,
+        "dept_id": row.dept_id,
+        "department_name": row.department.name if row.department else None,
         "group_roles": [
             {
                 "id": role.id,
@@ -41,6 +43,7 @@ def _serialize_person(row: Person) -> dict:
 async def _load_person_payload(db: AsyncSession, person_id: int) -> dict:
     result = await db.execute(
         select(Person)
+        .options(selectinload(Person.department))
         .options(selectinload(Person.group_roles).selectinload(PersonGroupRole.group))
         .where(Person.id == person_id)
         .execution_options(populate_existing=True)
@@ -115,6 +118,7 @@ async def delete_department(dept_id: int, db: AsyncSession = Depends(get_db)):
 async def get_persons(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Person)
+        .options(selectinload(Person.department))
         .options(selectinload(Person.group_roles).selectinload(PersonGroupRole.group))
         .order_by(Person.id)
     )
@@ -123,6 +127,11 @@ async def get_persons(db: AsyncSession = Depends(get_db)):
 
 @router.post("", response_model=PersonRead, status_code=201)
 async def create_person(body: PersonCreate, db: AsyncSession = Depends(get_db)):
+    if body.dept_id is not None:
+        department = await db.get(Department, body.dept_id)
+        if not department:
+            raise HTTPException(404, "부서를 찾을 수 없습니다")
+
     row = Person(**body.model_dump(exclude={"group_roles"}))
     db.add(row)
     await db.flush()
@@ -140,6 +149,10 @@ async def update_person(person_id: int, body: PersonUpdate, db: AsyncSession = D
         raise HTTPException(404, "담당자를 찾을 수 없습니다")
 
     data = body.model_dump(exclude_unset=True, exclude={"group_roles"})
+    if "dept_id" in data and data["dept_id"] is not None:
+        department = await db.get(Department, data["dept_id"])
+        if not department:
+            raise HTTPException(404, "부서를 찾을 수 없습니다")
     for key, value in data.items():
         setattr(row, key, value)
 

@@ -119,7 +119,10 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo  ---- Step 3: Container status ----
+echo  ---- Step 3: Ensuring default seed data... ----
+call :ENSURE_SEED
+echo.
+echo  ---- Step 4: Container status ----
 docker compose ps
 echo.
 echo  ================================================================
@@ -167,6 +170,14 @@ set DOCKER_BUILDKIT=
 echo.
 echo  ---- Restarting containers... ----
 docker compose up -d
+if %errorlevel% neq 0 (
+    echo.
+    echo   [Error] Failed to restart containers.
+    goto BACK
+)
+echo.
+echo  ---- Ensuring default seed data... ----
+call :ENSURE_SEED
 echo.
 echo  ---- Container status ----
 docker compose ps
@@ -212,6 +223,14 @@ set DOCKER_BUILDKIT=
 echo.
 echo  ---- Restarting backend container... ----
 docker compose up -d asset-backend
+if %errorlevel% neq 0 (
+    echo.
+    echo   [Error] Failed to restart backend container.
+    goto BACK
+)
+echo.
+echo  ---- Ensuring default seed data... ----
+call :ENSURE_SEED
 echo.
 echo  ---- Container status ----
 docker compose ps
@@ -257,6 +276,14 @@ set DOCKER_BUILDKIT=
 echo.
 echo  ---- Restarting frontend container... ----
 docker compose up -d asset-frontend
+if %errorlevel% neq 0 (
+    echo.
+    echo   [Error] Failed to restart frontend container.
+    goto BACK
+)
+echo.
+echo  ---- Verifying backend seed data (best effort)... ----
+call :ENSURE_SEED
 echo.
 echo  ---- Container status ----
 docker compose ps
@@ -646,9 +673,18 @@ if %errorlevel% neq 0 (
 echo.
 echo  ---- Restarting backend to re-run seed data... ----
 docker compose up -d asset-backend
+if %errorlevel% neq 0 (
+    echo.
+    echo   [Error] Failed to restart backend container.
+    goto BACK
+)
 echo.
 echo  ---- Waiting for backend to be ready... ----
 timeout /t 8 >nul
+echo  ---- Re-applying default seed data... ----
+call :RESET_SEED
+echo.
+echo  ---- Container status ----
 docker compose ps
 echo.
 echo   [Done] DB reset complete. Seed data has been re-applied.
@@ -656,6 +692,21 @@ goto BACK
 
 
 :: =====================================================================
+:ENSURE_SEED
+docker compose exec -T asset-backend python -m app.core.seed_runner
+if %errorlevel% neq 0 (
+    echo   [Warning] Could not verify seed data automatically.
+)
+exit /b 0
+
+:RESET_SEED
+docker compose exec -T asset-backend python -m app.core.seed_runner --reset
+if %errorlevel% neq 0 (
+    echo   [Error] Failed to re-apply seed data.
+    goto BACK
+)
+exit /b 0
+
 :BACK
 echo.
 echo  ----------------------------------------------------------------

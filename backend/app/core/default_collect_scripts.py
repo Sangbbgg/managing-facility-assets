@@ -214,8 +214,8 @@ $items = Get-HotFix -ErrorAction SilentlyContinue | Sort-Object HotFixID | ForEa
 DEFAULT_COLLECT_SCRIPTS = [
     {
         "script_key": "summary",
-        "display_name": "양식1 - 기본 요약",
-        "description": "시스템, 메모리, 디스크, GPU, NIC/IP, OS 정보를 수집합니다.",
+        "display_name": "\uc591\uc2dd1 - \uae30\ubcf8 \uc694\uc57d",
+        "description": "\uc2dc\uc2a4\ud15c, \uba54\ubaa8\ub9ac, \ub514\uc2a4\ud06c, GPU, NIC/IP, OS \uc815\ubcf4\ub97c \uc218\uc9d1\ud569\ub2c8\ub2e4.",
         "ps_command": SUMMARY_COMMAND,
         "ps_filename": "collect_summary.ps1",
         "target_table": "asset_hw_systems",
@@ -224,8 +224,8 @@ DEFAULT_COLLECT_SCRIPTS = [
     },
     {
         "script_key": "software",
-        "display_name": "양식2 - 설치 프로그램",
-        "description": "설치된 프로그램 전체 목록을 수집합니다.",
+        "display_name": "\uc591\uc2dd2 - \uc124\uce58 \ud504\ub85c\uadf8\ub7a8",
+        "description": "\uc124\uce58\ub41c \ud504\ub85c\uadf8\ub7a8 \uc804\uccb4 \ubaa9\ub85d\uc744 \uc218\uc9d1\ud569\ub2c8\ub2e4.",
         "ps_command": SOFTWARE_COMMAND,
         "ps_filename": "collect_software.ps1",
         "target_table": "asset_sw_products",
@@ -234,8 +234,8 @@ DEFAULT_COLLECT_SCRIPTS = [
     },
     {
         "script_key": "processes",
-        "display_name": "양식3 - 실행 프로세스",
-        "description": "실행 중인 프로세스 목록을 수집합니다.",
+        "display_name": "\uc591\uc2dd3 - \uc2e4\ud589 \ud504\ub85c\uc138\uc2a4",
+        "description": "\uc2e4\ud589 \uc911\uc778 \ud504\ub85c\uc138\uc2a4 \ubaa9\ub85d\uc744 \uc218\uc9d1\ud569\ub2c8\ub2e4.",
         "ps_command": PROCESS_COMMAND,
         "ps_filename": "collect_processes.ps1",
         "target_table": "asset_sw_processes",
@@ -244,8 +244,8 @@ DEFAULT_COLLECT_SCRIPTS = [
     },
     {
         "script_key": "accounts",
-        "display_name": "?묒떇3-1 - 濡쒖뺄 怨꾩젙",
-        "description": "Get-LocalUser 湲곕컲 濡쒖뺄 怨꾩젙, ?쒖꽦??, 二쇱꽍 ?뺣낫瑜??섏쭛?⑸땲??",
+        "display_name": "\uc591\uc2dd3-1 - \ub85c\uceec \uacc4\uc815",
+        "description": "Get-LocalUser \uae30\ubc18 \ub85c\uceec \uacc4\uc815, \ud65c\uc131\ud654, \uc8fc\uc11d \uc815\ubcf4\ub97c \uc218\uc9d1\ud569\ub2c8\ub2e4.",
         "ps_command": ACCOUNTS_COMMAND,
         "ps_filename": "collect_accounts.ps1",
         "target_table": "asset_sw_accounts",
@@ -254,8 +254,8 @@ DEFAULT_COLLECT_SCRIPTS = [
     },
     {
         "script_key": "network_connections",
-        "display_name": "양식4 - 네트워크 연결",
-        "description": "netstat 기반 네트워크 연결 정보를 수집합니다.",
+        "display_name": "\uc591\uc2dd4 - \ub124\ud2b8\uc6cc\ud06c \uc5f0\uacb0",
+        "description": "netstat \uae30\ubc18 \ub124\ud2b8\uc6cc\ud06c \uc5f0\uacb0 \uc815\ubcf4\ub97c \uc218\uc9d1\ud569\ub2c8\ub2e4.",
         "ps_command": CONNECTION_COMMAND,
         "ps_filename": "collect_network_connections.ps1",
         "target_table": "asset_network_connections",
@@ -264,8 +264,8 @@ DEFAULT_COLLECT_SCRIPTS = [
     },
     {
         "script_key": "hotfixes",
-        "display_name": "양식5 - Windows 업데이트",
-        "description": "설치된 Hotfix/KB 목록을 수집합니다.",
+        "display_name": "\uc591\uc2dd5 - Windows \uc5c5\ub370\uc774\ud2b8",
+        "description": "\uc124\uce58\ub41c Hotfix/KB \ubaa9\ub85d\uc744 \uc218\uc9d1\ud569\ub2c8\ub2e4.",
         "ps_command": HOTFIX_COMMAND,
         "ps_filename": "collect_hotfixes.ps1",
         "target_table": "asset_sw_hotfixes",

@@ -42,6 +42,7 @@ Use this skill as the repository-specific source of truth for Codex work in this
 - Prefer extending current flows over creating parallel patterns.
 - Keep schema synchronization additive by default. Do not introduce silent destructive schema mutations.
 - Treat mojibake Korean labels and comments as non-authoritative. Use current user intent and nearby clean code as the wording source.
+- Do not introduce new mojibake into code, seeds, or DB defaults. For Korean user-facing literals that must survive editor, shell, and Docker encoding differences, prefer ASCII-safe storage such as Python `\u` escapes or HTML entities, then verify both source rendering and persisted DB values before finishing.
 
 ## Current Feature Categories
 

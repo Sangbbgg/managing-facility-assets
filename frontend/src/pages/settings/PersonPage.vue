@@ -1,26 +1,36 @@
-<template>
-  <PageShell title="담당자 관리">
+﻿<template>
+  <PageShell title="&#xB2F4;&#xB2F9;&#xC790; &#xAD00;&#xB9AC;">
     <n-card style="margin-bottom: 16px">
       <n-form label-placement="left" label-width="90px">
         <n-grid :cols="2" :x-gap="12">
           <n-gi>
-            <n-form-item label="이름">
-              <n-input v-model:value="form.name" placeholder="담당자 이름" />
+            <n-form-item label="&#xC774;&#xB984;">
+              <n-input v-model:value="form.name" placeholder="&#xB2F4;&#xB2F9;&#xC790; &#xC774;&#xB984;" />
             </n-form-item>
           </n-gi>
           <n-gi>
-            <n-form-item label="직급">
-              <n-input v-model:value="form.title" placeholder="직급" />
+            <n-form-item label="&#xC9C1;&#xAE09;">
+              <n-input v-model:value="form.title" placeholder="&#xC9C1;&#xAE09;" />
+            </n-form-item>
+          </n-gi>
+          <n-gi>
+            <n-form-item label="&#xBD80;&#xC11C;">
+              <n-select
+                v-model:value="form.dept_id"
+                :options="departmentOptions"
+                clearable
+                placeholder="&#xBD80;&#xC11C;&#xB97C; &#xC120;&#xD0DD;&#xD558;&#xC138;&#xC694;"
+              />
             </n-form-item>
           </n-gi>
           <n-gi :span="2">
-            <n-form-item label="연락처">
-              <n-input v-model:value="form.contact" placeholder="전화 / 이메일" />
+            <n-form-item label="&#xC5F0;&#xB77D;&#xCC98;">
+              <n-input v-model:value="form.contact" placeholder="&#xC804;&#xD654; / &#xC774;&#xBA54;&#xC77C;" />
             </n-form-item>
           </n-gi>
         </n-grid>
 
-        <n-form-item label="담당 그룹">
+        <n-form-item label="&#xB2F4;&#xB2F9; &#xADF8;&#xB8F9;">
           <div class="group-box">
             <n-checkbox-group v-model:value="form.group_ids">
               <n-space vertical size="small">
@@ -35,40 +45,50 @@
           </div>
         </n-form-item>
 
-        <n-button type="primary" :loading="saving" @click="handleAdd">추가</n-button>
+        <n-button type="primary" :loading="saving" @click="handleAdd">&#xCD94;&#xAC00;</n-button>
       </n-form>
     </n-card>
 
     <n-card>
-      <DataTable title="담당자 목록" :columns="columns" :data="store.personList" :loading="store.loading" />
+      <DataTable title="&#xB2F4;&#xB2F9;&#xC790; &#xBAA9;&#xB85D;" :columns="columns" :data="store.personList" :loading="store.loading" />
     </n-card>
 
     <n-modal
       v-model:show="editModal"
       preset="dialog"
-      title="담당자 수정"
+      title="&#xB2F4;&#xB2F9;&#xC790; &#xC218;&#xC815;"
       style="width: min(980px, calc(100vw - 48px))"
     >
       <n-form label-placement="left" label-width="90px">
         <n-grid :cols="2" :x-gap="12">
           <n-gi>
-            <n-form-item label="이름">
+            <n-form-item label="&#xC774;&#xB984;">
               <n-input v-model:value="editForm.name" />
             </n-form-item>
           </n-gi>
           <n-gi>
-            <n-form-item label="직급">
+            <n-form-item label="&#xC9C1;&#xAE09;">
               <n-input v-model:value="editForm.title" />
             </n-form-item>
           </n-gi>
+          <n-gi>
+            <n-form-item label="&#xBD80;&#xC11C;">
+              <n-select
+                v-model:value="editForm.dept_id"
+                :options="departmentOptions"
+                clearable
+                placeholder="&#xBD80;&#xC11C;&#xB97C; &#xC120;&#xD0DD;&#xD558;&#xC138;&#xC694;"
+              />
+            </n-form-item>
+          </n-gi>
           <n-gi :span="2">
-            <n-form-item label="연락처">
+            <n-form-item label="&#xC5F0;&#xB77D;&#xCC98;">
               <n-input v-model:value="editForm.contact" />
             </n-form-item>
           </n-gi>
         </n-grid>
 
-        <n-form-item label="담당 그룹">
+        <n-form-item label="&#xB2F4;&#xB2F9; &#xADF8;&#xB8F9;">
           <div class="group-box">
             <n-checkbox-group v-model:value="editForm.group_ids">
               <n-space vertical size="small">
@@ -85,15 +105,15 @@
       </n-form>
 
       <template #action>
-        <n-button @click="editModal = false">취소</n-button>
-        <n-button type="primary" :loading="saving" @click="handleUpdate">저장</n-button>
+        <n-button @click="editModal = false">&#xCDE8;&#xC18C;</n-button>
+        <n-button type="primary" :loading="saving" @click="handleUpdate">&#xC800;&#xC7A5;</n-button>
       </template>
     </n-modal>
 
     <ConfirmModal
       v-model:show="deleteModal"
-      title="담당자 삭제"
-      message="선택한 담당자를 삭제하시겠습니까?"
+      title="&#xB2F4;&#xB2F9;&#xC790; &#xC0AD;&#xC81C;"
+      message="&#xC120;&#xD0DD;&#xD55C; &#xB2F4;&#xB2F9;&#xC790;&#xB97C; &#xC0AD;&#xC81C;&#xD558;&#xC2DC;&#xACA0;&#xC2B5;&#xB2C8;&#xAE4C;?"
       danger
       @confirm="confirmDelete"
     />
@@ -101,7 +121,7 @@
 </template>
 
 <script setup>
-import { h, onMounted, ref } from 'vue'
+import { computed, h, onMounted, ref } from 'vue'
 import { NButton, NSpace, useMessage } from 'naive-ui'
 
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
@@ -124,24 +144,33 @@ const emptyForm = () => ({
   name: '',
   title: '',
   contact: '',
+  dept_id: null,
   group_ids: [],
 })
 
 const form = ref(emptyForm())
 const editForm = ref(emptyForm())
 
+const departmentOptions = computed(() =>
+  (store.deptList || []).map((dept) => ({
+    label: dept.name,
+    value: dept.id,
+  }))
+)
+
 const columns = [
-  { title: '이름', key: 'name', width: 140, sorter: 'default' },
-  { title: '직급', key: 'title', width: 120, sorter: 'default' },
-  { title: '연락처', key: 'contact', width: 220 },
+  { title: '\uC774\uB984', key: 'name', width: 140, sorter: 'default' },
+  { title: '\uBD80\uC11C', key: 'department_name', width: 140, render: (row) => row.department_name || '-' },
+  { title: '\uC9C1\uAE09', key: 'title', width: 120, sorter: 'default' },
+  { title: '\uC5F0\uB77D\uCC98', key: 'contact', width: 220 },
   {
-    title: '담당 그룹',
+    title: '\uB2F4\uB2F9 \uADF8\uB8F9',
     key: 'group_roles_text',
     minWidth: 420,
     render: (row) => renderRoleSummary(row.group_roles),
   },
   {
-    title: '관리',
+    title: '\uAD00\uB9AC',
     key: 'actions',
     width: 140,
     render: (row) =>
@@ -153,7 +182,7 @@ const columns = [
               size: 'small',
               onClick: () => openEdit(row),
             },
-            { default: () => '수정' }
+            { default: () => '\uC218\uC815' }
           ),
           h(
             NButton,
@@ -163,7 +192,7 @@ const columns = [
               ghost: true,
               onClick: () => openDelete(row.id),
             },
-            { default: () => '삭제' }
+            { default: () => '\uC0AD\uC81C' }
           ),
         ],
       }),
@@ -197,6 +226,7 @@ function toEditableForm(row) {
     name: row.name || '',
     title: row.title || '',
     contact: row.contact || '',
+    dept_id: row.dept_id ?? null,
     group_ids: (row.group_roles || []).map((role) => role.group_id),
   }
 }
@@ -220,7 +250,7 @@ function openDelete(id) {
 
 async function handleAdd() {
   if (!form.value.name.trim()) {
-    message.warning('이름을 입력해 주세요.')
+    message.warning('\uC774\uB984\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694.')
     return
   }
 
@@ -230,10 +260,11 @@ async function handleAdd() {
       name: form.value.name.trim(),
       title: form.value.title?.trim() || '',
       contact: form.value.contact?.trim() || '',
+      dept_id: form.value.dept_id,
       group_roles: buildGroupRoles(form.value.group_ids),
     })
     form.value = emptyForm()
-    message.success('담당자를 추가했습니다.')
+    message.success('\uB2F4\uB2F9\uC790\uB97C \uCD94\uAC00\uD588\uC2B5\uB2C8\uB2E4.')
   } catch (error) {
     message.error(error.message)
   } finally {
@@ -243,7 +274,7 @@ async function handleAdd() {
 
 async function handleUpdate() {
   if (!editForm.value.name.trim()) {
-    message.warning('이름을 입력해 주세요.')
+    message.warning('\uC774\uB984\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694.')
     return
   }
 
@@ -253,10 +284,11 @@ async function handleUpdate() {
       name: editForm.value.name.trim(),
       title: editForm.value.title?.trim() || '',
       contact: editForm.value.contact?.trim() || '',
+      dept_id: editForm.value.dept_id,
       group_roles: buildGroupRoles(editForm.value.group_ids),
     })
     editModal.value = false
-    message.success('담당자를 수정했습니다.')
+    message.success('\uB2F4\uB2F9\uC790\uB97C \uC218\uC815\uD588\uC2B5\uB2C8\uB2E4.')
   } catch (error) {
     message.error(error.message)
   } finally {
@@ -267,7 +299,7 @@ async function handleUpdate() {
 async function confirmDelete() {
   try {
     await store.removePerson(deleteTarget.value)
-    message.success('담당자를 삭제했습니다.')
+    message.success('\uB2F4\uB2F9\uC790\uB97C \uC0AD\uC81C\uD588\uC2B5\uB2C8\uB2E4.')
   } catch (error) {
     message.error(error.message)
   } finally {
@@ -277,7 +309,7 @@ async function confirmDelete() {
 }
 
 onMounted(async () => {
-  await Promise.all([store.fetchPersons(), groupStore.fetchCodeable()])
+  await Promise.all([store.fetchPersons(), store.fetchDepts(), groupStore.fetchCodeable()])
 })
 </script>
 

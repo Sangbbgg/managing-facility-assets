@@ -148,6 +148,7 @@ class PersonBase(BaseModel):
     name: str
     title: Optional[str] = None
     contact: Optional[str] = None
+    dept_id: Optional[int] = None
 
 
 class PersonGroupRoleBase(BaseModel):
@@ -173,11 +174,13 @@ class PersonUpdate(BaseModel):
     name: Optional[str] = None
     title: Optional[str] = None
     contact: Optional[str] = None
+    dept_id: Optional[int] = None
     group_roles: Optional[list[PersonGroupRoleCreate]] = None
 
 
 class PersonRead(PersonBase):
     id: int
+    department_name: Optional[str] = None
     group_roles: list[PersonGroupRoleRead] = []
 
     model_config = {"from_attributes": True}
