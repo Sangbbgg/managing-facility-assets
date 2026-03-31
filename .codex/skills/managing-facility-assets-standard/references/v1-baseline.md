@@ -66,6 +66,7 @@ This file defines the current repository as the official `v1` baseline.
   - CPUs
   - memories
   - disks
+  - optical drives
   - GPUs
   - NICs
 - Software/detail collection:
@@ -139,6 +140,15 @@ This file defines the current repository as the official `v1` baseline.
 - Collect upload
 - Change log
 
+Collected hardware coverage includes:
+- system
+- CPU
+- memory
+- disk
+- optical drive
+- GPU
+- NIC
+
 ### Collection Upload
 
 - Collection scripts can be downloaded individually.
@@ -155,10 +165,18 @@ This file defines the current repository as the official `v1` baseline.
 - Network connections
 - Windows hotfixes
 
+Summary collection also includes:
+- optical drive inventory via `Win32_CDROMDrive`
+
 ### Reports
 
 - Report template management
 - Form-template mappings
+- Mapping modal sample-data table preview
+- Aggregate and template-based cell mapping
+- Repeat-direction mapping (`down`, `right`)
+- Workbook-style template preview
+- Workbook-style filled-report preview
 - HTML preview
 - XLSX generation
 - EVTX-related upload/report support
@@ -185,6 +203,12 @@ This file defines the current repository as the official `v1` baseline.
   - used NICs
   - unused NICs
 
+### Optical Drive Concept
+
+- Optical drive detail lives in `asset_hw_opticals`.
+- Collection can arrive as legacy name lists or structured rows, and parser normalization should accept both.
+- `/assets/details` should present optical drives as a first-class collected hardware section.
+
 ### Account Concept
 
 - Local account detail lives in `asset_sw_accounts`.
@@ -203,6 +227,14 @@ This file defines the current repository as the official `v1` baseline.
 - `code` is the internal unique key.
 - `display_code` is the user-facing code.
 - COM-style grouping relies on display behavior without breaking internal uniqueness.
+
+### Form-Template Mapping Concept
+
+- Form-template mappings are workbook-cell based and can target single-value or repeatable data sources.
+- Repeat mappings support vertical (`down`) and horizontal (`right`) fill.
+- Repeat placement must respect merged cells and skip merged-child targets.
+- Non-repeat mappings on repeatable sources can aggregate values and format them with `output_template`.
+- `output_template` placeholders currently include `{value}`, `{secondary}`, and `{count}`.
 
 ## Current Working Rules for Codex
 

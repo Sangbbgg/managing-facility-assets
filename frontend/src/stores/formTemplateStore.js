@@ -11,6 +11,8 @@ export const useFormTemplateStore = defineStore('formTemplate', () => {
   const loading = ref(false)
   const previewHtml = ref('')
   const workbookPreview = ref(null)
+  const previewWorkbookBinary = ref(null)
+  const previewWorkbookName = ref('')
   const dataPreview = ref(null)
 
   function syncTemplateMappingCount(templateId, mappingCount) {
@@ -104,12 +106,20 @@ export const useFormTemplateStore = defineStore('formTemplate', () => {
     return data
   }
 
+  function extractFilename(headers = {}, fallback = 'form_report.xlsx') {
+    const disposition = headers['content-disposition'] || ''
+    const match = disposition.match(/filename\*?=(?:UTF-8'')?(.+)/i)
+    return match ? decodeURIComponent(match[1]).replace(/^["']|["']$/g, '') : fallback
+  }
+
   async function fetchPreview(templateId, assetId) {
     loading.value = true
     try {
-      const { data } = await formTemplatesApi.preview(templateId, assetId)
-      previewHtml.value = data.html
-      return data.html
+      const response = await formTemplatesApi.generate(templateId, assetId)
+      previewWorkbookBinary.value = await response.data.arrayBuffer()
+      previewWorkbookName.value = extractFilename(response.headers)
+      previewHtml.value = ''
+      return previewWorkbookBinary.value
     } finally {
       loading.value = false
     }
@@ -130,6 +140,12 @@ export const useFormTemplateStore = defineStore('formTemplate', () => {
     workbookPreview.value = null
   }
 
+  function clearRenderedPreview() {
+    previewWorkbookBinary.value = null
+    previewWorkbookName.value = ''
+    previewHtml.value = ''
+  }
+
   async function fetchDataPreview(assetId, dataSource, maxRows = 5) {
     const { data } = await formTemplatesApi.dataPreview(assetId, dataSource, maxRows)
     dataPreview.value = data
@@ -143,9 +159,7 @@ export const useFormTemplateStore = defineStore('formTemplate', () => {
   async function downloadReport(templateId, assetId) {
     const response = await formTemplatesApi.generate(templateId, assetId)
     const url = window.URL.createObjectURL(new Blob([response.data]))
-    const disposition = response.headers['content-disposition'] || ''
-    const match = disposition.match(/filename\*?=(?:UTF-8'')?(.+)/i)
-    const filename = match ? decodeURIComponent(match[1]) : 'form_report.xlsx'
+    const filename = extractFilename(response.headers)
     const a = document.createElement('a')
     a.href = url
     a.download = filename
@@ -154,11 +168,11 @@ export const useFormTemplateStore = defineStore('formTemplate', () => {
   }
 
   return {
-    folders, templates, currentTemplate, mappings, fieldCatalog, loading, previewHtml, workbookPreview, dataPreview,
+    folders, templates, currentTemplate, mappings, fieldCatalog, loading, previewHtml, workbookPreview, previewWorkbookBinary, previewWorkbookName, dataPreview,
     fetchFolders, fetchList, fetchOne, create, update, remove,
     createFolder, updateFolder, removeFolder,
     fetchMappings, bulkSaveMappings,
     fetchFieldCatalog, fetchPreview, fetchWorkbookPreview, clearWorkbookPreview,
-    fetchDataPreview, clearDataPreview, downloadReport,
+    clearRenderedPreview, fetchDataPreview, clearDataPreview, downloadReport,
   }
 })

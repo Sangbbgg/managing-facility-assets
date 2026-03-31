@@ -52,6 +52,7 @@ Important concept:
 - `asset_hw_cpus`
 - `asset_hw_memories`
 - `asset_hw_disks`
+- `asset_hw_opticals`
 - `asset_hw_gpus`
 - `asset_hw_nics`
 
@@ -273,6 +274,11 @@ Flow:
 7. Remap representative NIC/account ids where possible.
 8. Update `assets.last_collected_at`.
 
+Current detail coverage:
+- Summary collection includes optical drive inventory from `Win32_CDROMDrive`.
+- Parser normalizes both legacy `optical_devices` values and structured `optical_drives` rows.
+- Optical drive rows are stored in `asset_hw_opticals` and returned from hardware APIs.
+
 #### H. Report Flow
 
 Routes:
@@ -286,6 +292,14 @@ Primary logic:
 
 Role:
 - Build report field catalogs, generate reports, and manage form-template mappings.
+
+Current form-template/report behavior:
+- `/api/form-templates/field-catalog` is driven by `form_report_builder.FIELD_CATALOG`.
+- Form-template mapping supports repeat directions `down` and `right`.
+- Repeat placement skips merged-child cells so repeated values land in visible worksheet cells.
+- Non-repeat mappings on repeatable sources can use aggregate modes plus `output_template`.
+- Mapping modal sample preview is backed by `/api/form-templates/data-preview`.
+- `hw_optical` is part of the form-template data-source catalog.
 
 ## 3. Frontend Flow
 
@@ -398,6 +412,7 @@ Role:
 - Support representative NIC/account selection.
 - Support unused NIC/account editing.
 - Support dynamic custom-field keys and values.
+- Expose collected optical drive rows alongside other hardware domains.
 
 #### C. `/assets/register` and `/assets/new`
 
@@ -422,6 +437,7 @@ Role:
 Role:
 - Manage report templates and form mappings.
 - Trigger report generation and preview.
+- Use workbook-style preview for both template mapping context and filled form-report output where fidelity matters.
 
 ## 4. End-to-End Reference Flows
 

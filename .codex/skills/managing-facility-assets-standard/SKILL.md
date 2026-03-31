@@ -73,6 +73,7 @@ Use this skill as the repository-specific source of truth for Codex work in this
 - Collection upload
 - Change log
 - Layout handling
+- Optical drive detail
 
 ### Collection Domains
 
@@ -80,11 +81,15 @@ Use this skill as the repository-specific source of truth for Codex work in this
 - Script bundle download
 - Raw collection run storage
 - Normalized hardware/software/account/network storage
+- Optical drive collection via `Win32_CDROMDrive`
 
 ### Report Domains
 
 - Form templates
 - Template mappings
+- Mapping modal sample-data preview
+- Workbook-style template preview
+- Workbook-style filled-report preview
 - HTML preview
 - XLSX generation
 - EVTX upload and report-related data flows
@@ -141,6 +146,7 @@ Use this skill as the repository-specific source of truth for Codex work in this
 - Keep list-level common-field editing lightweight.
 - Keep detailed review in the modal tabs.
 - Preserve the separation of common info, collected hardware, collected software, custom fields, collect upload, and change history.
+- Keep collected hardware tabs aligned with supported collection domains, including optical drives.
 
 ### When touching collection
 
@@ -152,6 +158,18 @@ Use this skill as the repository-specific source of truth for Codex work in this
   - storage table
   - API response
   - frontend display
+
+### When touching `/reports/form-templates`
+
+- Keep `FIELD_CATALOG`, backend data-source fetch definitions, and frontend source selectors aligned.
+- Mapping modal preview should stay inside the modal and use internal scrolling for large tables.
+- Mapping currently supports repeat direction `down` and `right`, aggregate modes for repeatable sources, and `output_template` placeholders `{value}`, `{secondary}`, `{count}`.
+- Horizontal repeat placement must respect merged cells and skip merged-child targets.
+
+### When touching `/reports/form-report`
+
+- Prefer workbook-style preview of the filled XLSX when users need fidelity comparable to the template workbook view.
+- Keep report preview and downloaded XLSX driven by the same generation output so preview matches export.
 
 ## Versioning Rule
 
