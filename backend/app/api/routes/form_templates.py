@@ -44,9 +44,23 @@ def _serialize_template(template: ReportFormTemplate, mapping_count: int = 0) ->
 # ─── 필드 카탈로그 (매핑 편집 UI용) — 경로 충돌 방지: 최상단에 위치 ───
 
 @router.get("/field-catalog", response_model=list[FormFieldInfo])
-async def get_field_catalog():
-    from app.services.form_report_builder import FIELD_CATALOG
-    return FIELD_CATALOG
+async def get_field_catalog(db: AsyncSession = Depends(get_db)):
+    from app.models.asset import Asset
+    from app.services.form_report_builder import build_field_catalog
+
+    rows = (
+        await db.execute(
+            select(Asset.custom_fields_json).where(Asset.custom_fields_json.is_not(None))
+        )
+    ).scalars().all()
+    custom_field_keys: set[str] = set()
+    for custom_fields in rows:
+        if isinstance(custom_fields, dict):
+            for key in custom_fields.keys():
+                key_text = str(key).strip()
+                if key_text:
+                    custom_field_keys.add(key_text)
+    return build_field_catalog(sorted(custom_field_keys))
 
 
 @router.get("/data-preview", response_model=FormDataPreviewResponse)

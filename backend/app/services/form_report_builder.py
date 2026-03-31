@@ -1,6 +1,8 @@
 import re
 import tempfile
 import zipfile
+import ast
+import operator
 from copy import copy
 from datetime import date, datetime
 from typing import Any
@@ -82,6 +84,18 @@ def _humanize_label(field: str) -> str:
     return field.replace("_", " ").title()
 
 
+def _flatten_custom_field_values(custom_fields: Any) -> dict[str, Any]:
+    if not isinstance(custom_fields, dict):
+        return {}
+    flattened: dict[str, Any] = {}
+    for key, value in custom_fields.items():
+        key_text = str(key).strip()
+        if not key_text:
+            continue
+        flattened[f"custom_fields.{key_text}"] = value
+    return flattened
+
+
 def _build_field_catalog() -> list[FormFieldInfo]:
     catalog: list[FormFieldInfo] = []
 
@@ -131,6 +145,22 @@ def _build_field_catalog() -> list[FormFieldInfo]:
 
 
 FIELD_CATALOG: list[FormFieldInfo] = _build_field_catalog()
+
+
+def build_field_catalog(custom_field_keys: list[str] | None = None) -> list[FormFieldInfo]:
+    catalog = list(FIELD_CATALOG)
+    for key in custom_field_keys or []:
+        key_text = str(key).strip()
+        if not key_text:
+            continue
+        catalog.append(
+            FormFieldInfo(
+                data_source="asset",
+                field=f"custom_fields.{key_text}",
+                label=f"Custom Field · {key_text}",
+            )
+        )
+    return catalog
 
 
 def _stringify_preview_value(value: Any) -> str:
@@ -450,6 +480,7 @@ async def fetch_asset_data(asset_id: int, db: AsyncSession) -> dict:
         "manager_title": manager.title if manager else "",
         "manager_contact": manager.contact if manager else "",
     })
+    data.update(_flatten_custom_field_values(data.get("custom_fields_json")))
     return data
 
 
@@ -519,7 +550,8 @@ async def build_data_source_preview(
     max_rows: int = 5,
 ) -> dict[str, Any]:
     data = await fetch_data_source(data_source, asset_id, db)
-    catalog_items = [item for item in FIELD_CATALOG if item.data_source == data_source]
+    custom_field_keys = list((data or {}).get("custom_fields_json", {}).keys()) if isinstance(data, dict) else []
+    catalog_items = [item for item in build_field_catalog(custom_field_keys) if item.data_source == data_source]
     field_names = [item.field for item in catalog_items]
 
     if isinstance(data, list):
@@ -583,12 +615,25 @@ def extract_mapped_value(data: Any, field: str):
     if not field:
         return ""
     if isinstance(data, dict):
+        if field in data:
+            return data.get(field, "")
+        if "." in field:
+            current = data
+            for part in field.split("."):
+                if not isinstance(current, dict):
+                    return ""
+                current = current.get(part)
+                if current is None:
+                    return ""
+            return current
         return data.get(field, "")
     if isinstance(data, list):
         if not data:
             return ""
         first_row = data[0]
         if isinstance(first_row, dict):
+            if field in first_row:
+                return first_row.get(field, "")
             return first_row.get(field, "")
     return ""
 
@@ -599,10 +644,79 @@ def _extract_list_field_values(data: Any, field: str) -> list[Any]:
     values = []
     for item in data:
         if isinstance(item, dict):
-            value = item.get(field, "")
+            value = extract_mapped_value(item, field)
             if value not in (None, ""):
                 values.append(value)
     return values
+
+
+_ALLOWED_MATH_BINARY_OPERATORS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+}
+
+_ALLOWED_MATH_UNARY_OPERATORS = {
+    ast.UAdd: operator.pos,
+    ast.USub: operator.neg,
+}
+
+
+def _coerce_numeric(value: Any) -> float:
+    if value in (None, ""):
+        return 0.0
+    if isinstance(value, bool):
+        return float(int(value))
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip().replace(",", "")
+    return float(text)
+
+
+def _eval_math_node(node, variables: dict[str, float]) -> float:
+    if isinstance(node, ast.Expression):
+        return _eval_math_node(node.body, variables)
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return float(node.value)
+    if isinstance(node, ast.Name) and node.id in variables:
+        return float(variables[node.id])
+    if isinstance(node, ast.BinOp) and type(node.op) in _ALLOWED_MATH_BINARY_OPERATORS:
+        left = _eval_math_node(node.left, variables)
+        right = _eval_math_node(node.right, variables)
+        return _ALLOWED_MATH_BINARY_OPERATORS[type(node.op)](left, right)
+    if isinstance(node, ast.UnaryOp) and type(node.op) in _ALLOWED_MATH_UNARY_OPERATORS:
+        return _ALLOWED_MATH_UNARY_OPERATORS[type(node.op)](_eval_math_node(node.operand, variables))
+    raise ValueError("unsupported expression")
+
+
+def _format_math_result(value: float) -> str:
+    if float(value).is_integer():
+        return str(int(value))
+    return f"{value:.6f}".rstrip("0").rstrip(".")
+
+
+def _render_output_template(output_template: str, variables: dict[str, Any], formatted_values: dict[str, str]) -> str:
+    def replace_math(match: re.Match[str]) -> str:
+        expr = match.group(1).strip()
+        try:
+            parsed = ast.parse(expr, mode="eval")
+            numeric_variables = {key: _coerce_numeric(val) for key, val in variables.items()}
+            result = _eval_math_node(parsed, numeric_variables)
+            return _format_math_result(result)
+        except Exception:
+            return match.group(0)
+
+    rendered = re.sub(r"\{\{\s*(.*?)\s*\}\}", replace_math, output_template)
+    return (
+        rendered
+        .replace("{value}", formatted_values["value"])
+        .replace("{secondary}", formatted_values["secondary"])
+        .replace("{count}", formatted_values["count"])
+    )
 
 
 def resolve_mapping_value(data: Any, mapping, count_value: int | None = None) -> str:
@@ -634,11 +748,18 @@ def resolve_mapping_value(data: Any, mapping, count_value: int | None = None) ->
 
     output_template = getattr(mapping, "output_template", None)
     if output_template:
-        return (
-            output_template
-            .replace("{value}", formatted_value)
-            .replace("{secondary}", secondary_formatted_value)
-            .replace("{count}", str(count_value))
+        return _render_output_template(
+            output_template,
+            {
+                "value": raw_value,
+                "secondary": secondary_raw_value,
+                "count": count_value,
+            },
+            {
+                "value": formatted_value,
+                "secondary": secondary_formatted_value,
+                "count": str(count_value),
+            },
         )
     return formatted_value
 

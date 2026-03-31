@@ -187,11 +187,11 @@
                 <n-form-item label="출력 템플릿">
                   <n-input
                     v-model:value="mappingForm.output_template"
-                    placeholder="예: {value} / {secondary} 또는 {value} * {count}"
+                    placeholder="예: {value} / {secondary} 또는 {{ value / 1024 / 1024 }} MB"
                   />
                 </n-form-item>
                 <div class="mapping-help">
-                  `{value}` 기본값, `{secondary}` 보조 필드, `{count}` 반복 데이터 개수
+                  `{value}` 기본값, `{secondary}` 보조 필드, `{count}` 반복 데이터 개수, `{{ value / 1024 / 1024 }}` 형태의 간단한 산술식 지원
                 </div>
                 <n-form-item label="서식">
                   <n-input v-model:value="mappingForm.format" placeholder="예: YYYY-MM-DD" />
@@ -631,6 +631,44 @@ const previewTableScrollX = computed(() =>
   56 + (previewFieldKeys.value.length * 160),
 )
 
+function coerceNumericValue(value) {
+  if (value === null || value === undefined || value === '') {
+    return 0
+  }
+  if (typeof value === 'number') {
+    return value
+  }
+  const parsed = Number(String(value).replaceAll(',', '').trim())
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function formatMathPreview(value) {
+  if (Number.isInteger(value)) {
+    return String(value)
+  }
+  return value.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')
+}
+
+function renderOutputTemplatePreview(template, variables, formattedValues) {
+  const rendered = template.replaceAll(/\{\{\s*(.*?)\s*\}\}/g, (_, expr) => {
+    const safeExpr = expr.replaceAll(/\b(value|secondary|count)\b/g, (token) => String(variables[token] ?? 0))
+    if (!/^[0-9+\-*/%().\s]+$/.test(safeExpr)) {
+      return `{{ ${expr} }}`
+    }
+    try {
+      const result = Function(`"use strict"; return (${safeExpr})`)()
+      return Number.isFinite(result) ? formatMathPreview(result) : `{{ ${expr} }}`
+    } catch {
+      return `{{ ${expr} }}`
+    }
+  })
+
+  return rendered
+    .replaceAll('{value}', formattedValues.value)
+    .replaceAll('{secondary}', formattedValues.secondary)
+    .replaceAll('{count}', formattedValues.count)
+}
+
 const previewExampleText = computed(() => {
   if (!mappingForm.value.field || !previewRows.value.length || mappingForm.value.repeat_direction) {
     return ''
@@ -665,10 +703,19 @@ const previewExampleText = computed(() => {
   }
 
   if (mappingForm.value.output_template) {
-    return mappingForm.value.output_template
-      .replaceAll('{value}', value)
-      .replaceAll('{secondary}', firstSecondaryValue)
-      .replaceAll('{count}', String(countValue))
+    return renderOutputTemplatePreview(
+      mappingForm.value.output_template,
+      {
+        value: coerceNumericValue(firstValue),
+        secondary: coerceNumericValue(firstSecondaryValue),
+        count: countValue,
+      },
+      {
+        value,
+        secondary: firstSecondaryValue,
+        count: String(countValue),
+      },
+    )
   }
   return value
 })
