@@ -50,6 +50,11 @@ export default {
   fieldCatalog() {
     return client.get('/api/form-templates/field-catalog')
   },
+  dataPreview(assetId, dataSource, maxRows = 5) {
+    return client.get('/api/form-templates/data-preview', {
+      params: { asset_id: assetId, data_source: dataSource, max_rows: maxRows },
+    })
+  },
   generate(templateId, assetId) {
     return client.post('/api/form-templates/generate', null, {
       params: { template_id: templateId, asset_id: assetId },

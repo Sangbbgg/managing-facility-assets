@@ -6,7 +6,7 @@ from app.models.master import (
 from app.models.asset import Asset, AssetCodeSequence, AssetChangeLog
 from app.models.hw_info import (
     AssetHwSystem, AssetHwCpu, AssetHwMemory,
-    AssetHwDisk, AssetHwGpu, AssetHwNic,
+    AssetHwDisk, AssetHwOptical, AssetHwGpu, AssetHwNic,
 )
 from app.models.sw_info import AssetSwProduct, AssetSwHotfix, AssetSwProcess, AssetSwAccount
 from app.models.custom_field import AssetCustomField

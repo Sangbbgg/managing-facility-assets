@@ -11,6 +11,7 @@ export const useFormTemplateStore = defineStore('formTemplate', () => {
   const loading = ref(false)
   const previewHtml = ref('')
   const workbookPreview = ref(null)
+  const dataPreview = ref(null)
 
   function syncTemplateMappingCount(templateId, mappingCount) {
     templates.value = templates.value.map((template) =>
@@ -129,6 +130,16 @@ export const useFormTemplateStore = defineStore('formTemplate', () => {
     workbookPreview.value = null
   }
 
+  async function fetchDataPreview(assetId, dataSource, maxRows = 5) {
+    const { data } = await formTemplatesApi.dataPreview(assetId, dataSource, maxRows)
+    dataPreview.value = data
+    return data
+  }
+
+  function clearDataPreview() {
+    dataPreview.value = null
+  }
+
   async function downloadReport(templateId, assetId) {
     const response = await formTemplatesApi.generate(templateId, assetId)
     const url = window.URL.createObjectURL(new Blob([response.data]))
@@ -143,10 +154,11 @@ export const useFormTemplateStore = defineStore('formTemplate', () => {
   }
 
   return {
-    folders, templates, currentTemplate, mappings, fieldCatalog, loading, previewHtml, workbookPreview,
+    folders, templates, currentTemplate, mappings, fieldCatalog, loading, previewHtml, workbookPreview, dataPreview,
     fetchFolders, fetchList, fetchOne, create, update, remove,
     createFolder, updateFolder, removeFolder,
     fetchMappings, bulkSaveMappings,
-    fetchFieldCatalog, fetchPreview, fetchWorkbookPreview, clearWorkbookPreview, downloadReport,
+    fetchFieldCatalog, fetchPreview, fetchWorkbookPreview, clearWorkbookPreview,
+    fetchDataPreview, clearDataPreview, downloadReport,
   }
 })

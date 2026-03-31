@@ -46,7 +46,15 @@ $gpuItems = @(Get-CimInstance Win32_VideoController | ForEach-Object {
         resolution = $_.VideoModeDescription
     }
 } | Sort-Object name, driver_version -Unique)
-$opticalDevices = @(Get-CimInstance Win32_CDROMDrive -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
+$opticalDevices = @(Get-CimInstance Win32_CDROMDrive -ErrorAction SilentlyContinue | ForEach-Object {
+    @{
+        name = $_.Name
+        drive = $_.Drive
+        media_type = $_.MediaType
+        status = $_.Status
+        manufacturer = $_.Manufacturer
+    }
+})
 $interfaces = @(Get-NetIPConfiguration | Where-Object { $_.NetAdapter } | ForEach-Object {
     $firstIp = if ($_.IPv4Address) { $_.IPv4Address | Select-Object -First 1 } else { $null }
     $dnsServers = @()
@@ -88,6 +96,7 @@ $ipConfigs = @($interfaces | ForEach-Object {
         storage_devices = @($diskItems | ForEach-Object { $_.model })
         display_devices = @($gpuItems | ForEach-Object { $_.name })
         optical_devices = $opticalDevices
+        optical_drives = $opticalDevices
         hostname = $env:COMPUTERNAME
         os_name = $os.Caption
         os_version = $os.Version

@@ -4,11 +4,11 @@ from sqlalchemy import select
 from app.core.database import get_db
 from app.models.hw_info import (
     AssetHwSystem, AssetHwCpu, AssetHwMemory,
-    AssetHwDisk, AssetHwGpu, AssetHwNic,
+    AssetHwDisk, AssetHwOptical, AssetHwGpu, AssetHwNic,
 )
 from app.schemas.hw_info import (
     HwSystemRead, HwCpuRead, HwMemoryRead,
-    HwDiskRead, HwGpuRead, HwNicRead, HwAllRead, UnusedNicUpdate,
+    HwDiskRead, HwOpticalRead, HwGpuRead, HwNicRead, HwAllRead, UnusedNicUpdate,
 )
 from app.models.asset import Asset
 
@@ -19,6 +19,7 @@ HW_MODEL_MAP = {
     "cpus":     (AssetHwCpu,     HwCpuRead),
     "memories": (AssetHwMemory,  HwMemoryRead),
     "disks":    (AssetHwDisk,    HwDiskRead),
+    "opticals": (AssetHwOptical, HwOpticalRead),
     "gpus":     (AssetHwGpu,     HwGpuRead),
     "nics":     (AssetHwNic,     HwNicRead),
 }

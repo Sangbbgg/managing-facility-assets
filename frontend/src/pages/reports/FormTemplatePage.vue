@@ -4,12 +4,12 @@
       <div>
         <h2 class="page-title">양식 템플릿 관리</h2>
         <p class="page-description">
-          왼쪽에서 템플릿을 관리하고, 오른쪽에서 실제 시트 미리보기를 확인할 수 있습니다.
+          템플릿을 선택하고 셀을 클릭하면 바로 매핑을 편집할 수 있습니다.
         </p>
       </div>
       <div class="header-actions">
         <n-button quaternary @click="togglePreview">
-          {{ showPreview ? '프리뷰 숨기기' : '프리뷰 펼치기' }}
+          {{ showPreview ? '미리보기 숨기기' : '미리보기 펼치기' }}
         </n-button>
       </div>
     </div>
@@ -60,7 +60,7 @@
         <n-form-item label="설명">
           <n-input v-model:value="templateForm.description" type="textarea" :rows="3" />
         </n-form-item>
-        <n-form-item v-if="editingTemplate" label="활성 상태">
+        <n-form-item v-if="editingTemplate" label="사용 여부">
           <n-switch v-model:value="templateForm.is_active" />
         </n-form-item>
         <n-form-item v-else label="양식 파일">
@@ -89,97 +89,197 @@
       v-model:show="showMappingModal"
       preset="card"
       title="셀 매핑"
-      style="width: 760px; max-width: 96vw"
+      style="width: min(1800px, 99vw)"
+      content-style="padding: 0"
       :mask-closable="true"
     >
-      <div v-if="selectedTemplate" class="mapping-body">
-        <div class="mapping-header">
-          <div>
-            <div class="mapping-title">{{ selectedCellLabel || '셀을 선택해 주세요' }}</div>
-            <div class="mapping-subtitle">
-              프리뷰에서 선택한 셀을 팝업에서 바로 매핑할 수 있습니다.
-            </div>
-          </div>
-          <n-button
-            type="primary"
-            :disabled="!canSaveMapping"
-            :loading="mappingSaving"
-            @click="saveSelectedMapping"
-          >
-            매핑 저장
-          </n-button>
-        </div>
-
-        <div class="mapping-layout">
-          <n-form label-placement="top" class="mapping-form">
-            <n-form-item label="시트 / 셀">
-              <n-input
-                :value="selectedCellLabel"
-                readonly
-                placeholder="프리뷰에서 셀을 선택해 주세요"
-              />
-            </n-form-item>
-            <n-form-item label="데이터 소스">
-              <n-select
-                v-model:value="mappingForm.data_source"
-                :options="sourceOptions"
-                placeholder="데이터 소스를 선택해 주세요"
-                @update:value="handleSourceChange"
-              />
-            </n-form-item>
-            <n-form-item label="필드">
-              <n-select
-                v-model:value="mappingForm.field"
-                :options="fieldOptions"
-                filterable
-                placeholder="필드를 선택해 주세요"
-              />
-            </n-form-item>
-            <n-form-item label="포맷">
-              <n-input v-model:value="mappingForm.format" placeholder="예: YYYY-MM-DD" />
-            </n-form-item>
-            <n-form-item label="반복 데이터">
-              <n-switch v-model:value="mappingForm.is_repeat" />
-            </n-form-item>
-            <n-form-item v-if="mappingForm.is_repeat" label="최대 행 수">
-              <n-input-number v-model:value="mappingForm.repeat_max_rows" :min="1" :max="200" />
-            </n-form-item>
-          </n-form>
-
-          <div class="mapping-side">
-            <div class="mapping-list-header">
-              현재 시트 매핑 {{ currentSheetMappings.length }}개
-            </div>
-            <n-scrollbar style="max-height: 360px">
-              <div v-if="currentSheetMappings.length" class="mapping-list">
-                <button
-                  v-for="mapping in currentSheetMappings"
-                  :key="mapping.id || `${mapping.sheet_name}-${mapping.cell}`"
-                  type="button"
-                  class="mapping-item"
-                  :class="{ active: isSelectedMapping(mapping) }"
-                  @click="selectExistingMapping(mapping)"
-                >
-                  <div class="mapping-item-main">
-                    <strong>{{ mapping.cell }}</strong>
-                    <span>{{ mapping.data_source }}.{{ mapping.field }}</span>
-                    <span v-if="mapping.repeat_direction" class="mapping-repeat">반복</span>
-                  </div>
-                  <n-button size="tiny" type="error" @click.stop="removeMapping(mapping)">
-                    삭제
-                  </n-button>
-                </button>
+      <div v-if="selectedTemplate" class="mapping-modal-content">
+        <n-scrollbar class="mapping-modal-scroll">
+          <div class="mapping-body">
+            <div class="mapping-header">
+              <div>
+                <div class="mapping-title">{{ selectedCellLabel || '셀을 선택해 주세요' }}</div>
+                <div class="mapping-subtitle">
+                  데이터 소스와 필드를 선택하면 샘플 자산 기준 실제 값을 바로 확인할 수 있습니다.
+                </div>
               </div>
-              <n-empty
-                v-else
-                size="small"
-                description="현재 시트에는 저장된 매핑이 없습니다."
-              />
-            </n-scrollbar>
+              <n-button
+                type="primary"
+                :disabled="!canSaveMapping"
+                :loading="mappingSaving"
+                @click="saveSelectedMapping"
+              >
+                매핑 저장
+              </n-button>
+            </div>
+
+            <div class="mapping-layout">
+              <n-form label-placement="top" class="mapping-form">
+                <n-form-item label="시트 / 셀">
+                  <n-input
+                    :value="selectedCellLabel"
+                    readonly
+                    placeholder="미리보기에서 셀을 선택해 주세요"
+                  />
+                </n-form-item>
+                <n-form-item label="데이터 소스">
+                  <n-select
+                    v-model:value="mappingForm.data_source"
+                    :options="sourceOptions"
+                    placeholder="데이터 소스를 선택해 주세요"
+                    @update:value="handleSourceChange"
+                  />
+                </n-form-item>
+                <n-form-item label="필드">
+                  <n-select
+                    v-model:value="mappingForm.field"
+                    :options="fieldOptions"
+                    filterable
+                    placeholder="필드를 선택해 주세요"
+                  />
+                </n-form-item>
+                <n-form-item label="보조 필드">
+                  <n-select
+                    v-model:value="mappingForm.secondary_field"
+                    :options="secondaryFieldOptions"
+                    filterable
+                    clearable
+                    placeholder="필요할 때만 선택해 주세요"
+                  />
+                </n-form-item>
+                <n-form-item label="샘플 자산">
+                  <n-select
+                    v-model:value="previewAssetId"
+                    :options="assetOptions"
+                    filterable
+                    clearable
+                    placeholder="미리볼 자산을 선택해 주세요"
+                  />
+                </n-form-item>
+                <n-form-item v-if="!mappingForm.repeat_direction" label="집계 방식">
+                  <n-select
+                    v-model:value="mappingForm.aggregate_mode"
+                    :options="aggregateOptions"
+                    placeholder="집계 방식을 선택해 주세요"
+                  />
+                </n-form-item>
+                <n-form-item label="출력 템플릿">
+                  <n-input
+                    v-model:value="mappingForm.output_template"
+                    placeholder="예: {value} / {secondary} 또는 {value} * {count}"
+                  />
+                </n-form-item>
+                <div class="mapping-help">
+                  `{value}` 기본값, `{secondary}` 보조 필드, `{count}` 반복 데이터 개수
+                </div>
+                <n-form-item label="서식">
+                  <n-input v-model:value="mappingForm.format" placeholder="예: YYYY-MM-DD" />
+                </n-form-item>
+                <n-form-item label="반복 방향">
+                  <n-select
+                    v-model:value="mappingForm.repeat_direction"
+                    :options="repeatDirectionOptions"
+                    placeholder="반복 없음"
+                  />
+                </n-form-item>
+                <n-form-item v-if="mappingForm.repeat_direction" label="최대 개수">
+                  <n-input-number v-model:value="mappingForm.repeat_max_rows" :min="1" :max="200" />
+                </n-form-item>
+              </n-form>
+
+              <div class="mapping-side">
+                <div class="mapping-preview-panel">
+                  <div class="mapping-list-header">데이터 미리보기</div>
+                  <div class="mapping-preview-summary">
+                    <span v-if="mappingForm.data_source">{{ mappingForm.data_source }}</span>
+                    <span v-if="mappingForm.field">.{{ mappingForm.field }}</span>
+                    <span v-if="selectedFieldMeta?.is_repeatable" class="mapping-repeat">반복</span>
+                    <span v-if="!mappingForm.repeat_direction && mappingForm.aggregate_mode" class="mapping-aggregate">
+                      {{ aggregateLabel }}
+                    </span>
+                  </div>
+
+                  <n-spin :show="previewLoading">
+                    <div v-if="!previewAssetId" class="mapping-preview-empty">
+                      샘플 자산을 선택하면 실제 데이터를 확인할 수 있습니다.
+                    </div>
+                    <div v-else-if="!mappingForm.data_source" class="mapping-preview-empty">
+                      데이터 소스를 먼저 선택해 주세요.
+                    </div>
+                    <div v-else-if="!store.dataPreview?.total_rows" class="mapping-preview-empty">
+                      선택한 자산에 이 데이터 소스의 값이 없습니다.
+                    </div>
+                    <div v-else class="mapping-preview-content">
+                      <div v-if="previewExampleText" class="mapping-preview-example">
+                        예상 출력: {{ previewExampleText }}
+                      </div>
+                      <div class="mapping-row-list">
+                        <div class="mapping-list-header">행 샘플</div>
+                        <div class="mapping-table-wrap">
+                          <n-scrollbar x-scrollable>
+                            <n-data-table
+                              :columns="previewTableColumns"
+                              :data="previewTableData"
+                              :pagination="false"
+                              :max-height="360"
+                              :scroll-x="previewTableScrollX"
+                              size="small"
+                              striped
+                            />
+                          </n-scrollbar>
+                        </div>
+                        <div v-if="store.dataPreview?.truncated" class="mapping-preview-note">
+                          상위 {{ previewRows.length }}개 행만 표시하고 있습니다.
+                        </div>
+                      </div>
+                    </div>
+                  </n-spin>
+                </div>
+
+                <div class="mapping-list-header">
+                  현재 시트 매핑 {{ currentSheetMappings.length }}개
+                </div>
+                <n-scrollbar style="max-height: 360px">
+                  <div v-if="currentSheetMappings.length" class="mapping-list">
+                    <button
+                      v-for="mapping in currentSheetMappings"
+                      :key="mapping.id || `${mapping.sheet_name}-${mapping.cell}`"
+                      type="button"
+                      class="mapping-item"
+                      :class="{ active: isSelectedMapping(mapping) }"
+                      @click="selectExistingMapping(mapping)"
+                    >
+                      <div class="mapping-item-main">
+                        <strong>{{ mapping.cell }}</strong>
+                        <span>{{ mapping.data_source }}.{{ mapping.field }}</span>
+                        <span v-if="mapping.aggregate_mode && !mapping.repeat_direction" class="mapping-aggregate">
+                          {{ aggregateOptionMap[mapping.aggregate_mode] || mapping.aggregate_mode }}
+                        </span>
+                        <span v-if="mapping.repeat_direction" class="mapping-repeat">
+                          {{ repeatDirectionMap[mapping.repeat_direction] || mapping.repeat_direction }}
+                        </span>
+                      </div>
+                      <n-button size="tiny" type="error" @click.stop="removeMapping(mapping)">
+                        삭제
+                      </n-button>
+                    </button>
+                  </div>
+                  <n-empty
+                    v-else
+                    size="small"
+                    description="현재 시트에는 등록된 매핑이 없습니다."
+                  />
+                </n-scrollbar>
+              </div>
+            </div>
           </div>
-        </div>
+        </n-scrollbar>
       </div>
-      <n-empty v-else size="small" description="템플릿을 선택하면 셀 매핑을 편집할 수 있습니다." />
+      <n-empty
+        v-else
+        size="small"
+        description="템플릿을 선택한 뒤 셀을 클릭하면 매핑을 편집할 수 있습니다."
+      />
 
       <template #footer>
         <div class="modal-footer">
@@ -191,14 +291,16 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, h, onMounted, ref, watch } from 'vue'
 import { useMessage } from 'naive-ui'
 import PageShell from '@/components/common/PageShell.vue'
 import FormTemplateList from '@/components/reports/FormTemplateList.vue'
 import FormTemplateWorkbookPreview from '@/components/reports/FormTemplateWorkbookPreview.vue'
 import { useFormTemplateStore } from '@/stores/formTemplateStore'
+import { useAssetStore } from '@/stores/assetStore'
 
 const store = useFormTemplateStore()
+const assetStore = useAssetStore()
 const message = useMessage()
 
 const showTemplateModal = ref(false)
@@ -212,12 +314,41 @@ const templateForm = ref(emptyTemplateForm())
 const selectedCell = ref(null)
 const mappingSaving = ref(false)
 const mappingForm = ref(emptyMappingForm())
+const previewLoading = ref(false)
+const previewAssetId = ref(null)
 
 const categoryOptions = [
   { label: '일반', value: 'general' },
   { label: '점검', value: 'inspection' },
   { label: '보안', value: 'security' },
 ]
+
+const aggregateOptions = [
+  { label: '기본값', value: 'value' },
+  { label: '첫 번째 값', value: 'first' },
+  { label: '개수', value: 'count' },
+  { label: '쉼표 연결', value: 'join' },
+  { label: '중복 제거 후 연결', value: 'join_unique' },
+]
+
+const repeatDirectionOptions = [
+  { label: '반복 없음', value: null },
+  { label: '아래로', value: 'down' },
+  { label: '오른쪽', value: 'right' },
+]
+
+const aggregateOptionMap = {
+  value: '기본값',
+  first: '첫 번째 값',
+  count: '개수',
+  join: '쉼표 연결',
+  join_unique: '중복 제거 후 연결',
+}
+
+const repeatDirectionMap = {
+  down: '아래로',
+  right: '오른쪽',
+}
 
 const selectedTemplate = computed(() =>
   store.templates.find((template) => template.id === selectedTemplateId.value) || null,
@@ -236,6 +367,13 @@ const folderOptions = computed(() =>
   })),
 )
 
+const assetOptions = computed(() =>
+  assetStore.list.map((asset) => ({
+    label: `${asset.asset_code || '-'} ${asset.asset_name || ''}`.trim(),
+    value: asset.id,
+  })),
+)
+
 const sourceOptions = computed(() => {
   const sources = [...new Set(store.fieldCatalog.map((item) => item.data_source))]
   return sources.map((source) => ({ label: source, value: source }))
@@ -249,6 +387,105 @@ const fieldOptions = computed(() =>
       value: item.field,
     })),
 )
+
+const secondaryFieldOptions = computed(() =>
+  fieldOptions.value.filter((item) => item.value !== mappingForm.value.field),
+)
+
+const selectedFieldMeta = computed(() =>
+  store.fieldCatalog.find(
+    (item) =>
+      item.data_source === mappingForm.value.data_source
+      && item.field === mappingForm.value.field,
+  ) || null,
+)
+
+const aggregateLabel = computed(() =>
+  aggregateOptionMap[mappingForm.value.aggregate_mode] || '',
+)
+
+const previewRows = computed(() => store.dataPreview?.rows || [])
+
+const previewTableData = computed(() =>
+  previewRows.value.map((row) => ({
+    row_index: row.row_index,
+    ...(row.values || {}),
+  })),
+)
+
+const previewFieldKeys = computed(() => {
+  const firstRow = previewRows.value[0]
+  return firstRow ? Object.keys(firstRow.values || {}) : []
+})
+
+const previewTableColumns = computed(() => {
+  const baseColumn = {
+    key: 'row_index',
+    title: '#',
+    width: 56,
+    fixed: 'left',
+  }
+
+  const dataColumns = previewFieldKeys.value.map((key) => ({
+    key,
+    title: key,
+    minWidth: 160,
+    className: key === mappingForm.value.field ? 'mapping-preview-column-active' : '',
+    render: (row) => h(
+      'span',
+      { class: key === mappingForm.value.field ? 'mapping-preview-cell-active' : '' },
+      row[key] || '(빈 값)',
+    ),
+  }))
+
+  return [baseColumn, ...dataColumns]
+})
+
+const previewTableScrollX = computed(() =>
+  56 + (previewFieldKeys.value.length * 160),
+)
+
+const previewExampleText = computed(() => {
+  if (!mappingForm.value.field || !previewRows.value.length || mappingForm.value.repeat_direction) {
+    return ''
+  }
+
+  const values = previewRows.value
+    .map((row) => row.values?.[mappingForm.value.field] ?? '')
+    .filter((value) => value !== '')
+  const secondaryValues = previewRows.value
+    .map((row) => row.values?.[mappingForm.value.secondary_field] ?? '')
+    .filter((value) => value !== '')
+  const firstValue = values[0] || ''
+  const firstSecondaryValue = secondaryValues[0] || ''
+  const countValue = previewRows.value.length
+  let value = firstValue
+
+  switch (mappingForm.value.aggregate_mode) {
+    case 'count':
+      value = String(countValue)
+      break
+    case 'join':
+      value = values.join(', ')
+      break
+    case 'join_unique':
+      value = [...new Set(values)].join(', ')
+      break
+    case 'first':
+    case 'value':
+    default:
+      value = firstValue
+      break
+  }
+
+  if (mappingForm.value.output_template) {
+    return mappingForm.value.output_template
+      .replaceAll('{value}', value)
+      .replaceAll('{secondary}', firstSecondaryValue)
+      .replaceAll('{count}', String(countValue))
+  }
+  return value
+})
 
 const currentSheetMappings = computed(() =>
   store.mappings.filter((item) => (item.sheet_name || '') === (selectedCell.value?.sheetName || '')),
@@ -285,8 +522,11 @@ function emptyMappingForm() {
   return {
     data_source: null,
     field: null,
+    secondary_field: null,
     format: '',
-    is_repeat: false,
+    aggregate_mode: 'value',
+    output_template: '',
+    repeat_direction: null,
     repeat_max_rows: 10,
   }
 }
@@ -338,6 +578,7 @@ async function handleSelect(template) {
   selectedCell.value = null
   closeMappingModal()
   resetMappingForm()
+  store.clearDataPreview()
   if (!template?.id) {
     store.clearWorkbookPreview()
     store.mappings = []
@@ -351,6 +592,38 @@ async function handleSelect(template) {
 
 function handleSourceChange() {
   mappingForm.value.field = null
+  mappingForm.value.secondary_field = null
+  mappingForm.value.aggregate_mode = 'value'
+  mappingForm.value.output_template = ''
+}
+
+async function loadDataPreview() {
+  if (!previewAssetId.value || !mappingForm.value.data_source || !showMappingModal.value) {
+    store.clearDataPreview()
+    return
+  }
+  previewLoading.value = true
+  try {
+    await store.fetchDataPreview(previewAssetId.value, mappingForm.value.data_source)
+  } catch (error) {
+    store.clearDataPreview()
+    message.error(`데이터 미리보기를 불러오지 못했습니다: ${error.message || ''}`)
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+function applyMappingToForm(mapping) {
+  mappingForm.value = {
+    data_source: mapping.data_source,
+    field: mapping.field,
+    secondary_field: mapping.secondary_field || null,
+    format: mapping.format || '',
+    aggregate_mode: mapping.aggregate_mode || 'value',
+    output_template: mapping.output_template || '',
+    repeat_direction: mapping.repeat_direction || null,
+    repeat_max_rows: mapping.repeat_max_rows || 10,
+  }
 }
 
 function handleSelectCell(cellInfo) {
@@ -361,13 +634,7 @@ function handleSelectCell(cellInfo) {
       && item.cell === cellInfo.cell,
   )
   if (existing) {
-    mappingForm.value = {
-      data_source: existing.data_source,
-      field: existing.field,
-      format: existing.format || '',
-      is_repeat: !!existing.repeat_direction,
-      repeat_max_rows: existing.repeat_max_rows || 10,
-    }
+    applyMappingToForm(existing)
   } else {
     resetMappingForm()
   }
@@ -386,13 +653,7 @@ function selectExistingMapping(mapping) {
     sheetName: mapping.sheet_name || '',
     cell: mapping.cell,
   }
-  mappingForm.value = {
-    data_source: mapping.data_source,
-    field: mapping.field,
-    format: mapping.format || '',
-    is_repeat: !!mapping.repeat_direction,
-    repeat_max_rows: mapping.repeat_max_rows || 10,
-  }
+  applyMappingToForm(mapping)
   showMappingModal.value = true
 }
 
@@ -414,10 +675,13 @@ async function saveSelectedMapping() {
       cell: selectedCell.value?.cell,
       data_source: mappingForm.value.data_source,
       field: mappingForm.value.field,
+      secondary_field: mappingForm.value.secondary_field || null,
       display_label: '',
       format: mappingForm.value.format || null,
-      repeat_direction: mappingForm.value.is_repeat ? 'down' : null,
-      repeat_max_rows: mappingForm.value.is_repeat ? mappingForm.value.repeat_max_rows : null,
+      aggregate_mode: mappingForm.value.repeat_direction ? null : mappingForm.value.aggregate_mode || 'value',
+      output_template: mappingForm.value.output_template || null,
+      repeat_direction: mappingForm.value.repeat_direction || null,
+      repeat_max_rows: mappingForm.value.repeat_direction ? mappingForm.value.repeat_max_rows : null,
       sort_order: nextMappings.length,
     })
     await store.bulkSaveMappings(selectedTemplateId.value, nextMappings)
@@ -474,7 +738,7 @@ async function submitTemplate() {
       formData.append('file', uploadFile.value)
       const created = await store.create(formData)
       message.success('템플릿을 등록했습니다.')
-      handleSelect(created)
+      await handleSelect(created)
     }
     closeModal()
   } catch (error) {
@@ -485,7 +749,10 @@ async function submitTemplate() {
 }
 
 onMounted(async () => {
-  await Promise.all([store.fetchFolders(), store.fetchList()])
+  await Promise.all([store.fetchFolders(), store.fetchList(), assetStore.fetchList()])
+  if (assetStore.list.length > 0) {
+    previewAssetId.value = assetStore.list[0].id
+  }
   if (store.templates.length > 0) {
     await handleSelect(store.templates[0])
   }
@@ -495,7 +762,19 @@ watch(selectedTemplateId, () => {
   selectedCell.value = null
   closeMappingModal()
   resetMappingForm()
+  store.clearDataPreview()
 })
+
+watch(
+  () => [previewAssetId.value, mappingForm.value.data_source, showMappingModal.value],
+  async ([assetId, dataSource, modalOpen]) => {
+    if (!assetId || !dataSource || !modalOpen) {
+      store.clearDataPreview()
+      return
+    }
+    await loadDataPreview()
+  },
+)
 </script>
 
 <style scoped>
@@ -570,14 +849,24 @@ watch(selectedTemplateId, () => {
   color: #64748b;
 }
 
+.mapping-modal-content {
+  max-height: min(84vh, 980px);
+}
+
+.mapping-modal-scroll {
+  max-height: min(84vh, 980px);
+}
+
 .mapping-body {
   display: grid;
   gap: 14px;
+  padding: 24px;
+  min-width: 0;
 }
 
 .mapping-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(320px, 380px) minmax(0, 1.25fr);
   gap: 18px;
   align-items: start;
 }
@@ -588,7 +877,88 @@ watch(selectedTemplateId, () => {
 
 .mapping-side {
   display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.mapping-preview-panel {
+  display: grid;
   gap: 10px;
+  padding: 14px;
+  border: 1px solid #dbe3f0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  min-width: 0;
+}
+
+.mapping-preview-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.mapping-preview-empty {
+  padding: 20px 12px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  color: #64748b;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.mapping-preview-content {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.mapping-row-list {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mapping-table-wrap {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.mapping-preview-note {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.mapping-help {
+  margin: -4px 0 12px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.mapping-preview-example {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mapping-aggregate {
+  color: #2563eb;
+  font-weight: 600;
+}
+
+:deep(.mapping-preview-column-active) {
+  background: #f0f7ff;
+}
+
+:deep(.mapping-preview-cell-active) {
+  display: inline-block;
+  width: 100%;
+  color: #1d4ed8;
+  font-weight: 600;
 }
 
 .mapping-list-header {

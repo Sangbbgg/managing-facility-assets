@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { hardwareApi } from '@/api/hardwareApi'
 
 export const useAssetHwStore = defineStore('assetHw', () => {
-  const all     = ref({})  // { systems:[], cpus:[], memories:[], disks:[], gpus:[], nics:[] }
+  const all     = ref({})  // { systems:[], cpus:[], memories:[], disks:[], opticals:[], gpus:[], nics:[] }
   const loading = ref(false)
 
   async function fetchAll(assetId) {

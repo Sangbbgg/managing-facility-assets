@@ -61,8 +61,11 @@ class FormMappingCreate(BaseModel):
     cell: str
     data_source: str
     field: str
+    secondary_field: Optional[str] = None
     display_label: Optional[str] = None
     format: Optional[str] = None
+    aggregate_mode: Optional[str] = None
+    output_template: Optional[str] = None
     repeat_direction: Optional[str] = None
     repeat_max_rows: Optional[int] = None
     sort_order: int = 0
@@ -73,8 +76,11 @@ class FormMappingUpdate(BaseModel):
     cell: Optional[str] = None
     data_source: Optional[str] = None
     field: Optional[str] = None
+    secondary_field: Optional[str] = None
     display_label: Optional[str] = None
     format: Optional[str] = None
+    aggregate_mode: Optional[str] = None
+    output_template: Optional[str] = None
     repeat_direction: Optional[str] = None
     repeat_max_rows: Optional[int] = None
     sort_order: Optional[int] = None
@@ -87,8 +93,11 @@ class FormMappingRead(BaseModel):
     cell: str
     data_source: str
     field: str
+    secondary_field: Optional[str]
     display_label: Optional[str]
     format: Optional[str]
+    aggregate_mode: Optional[str]
+    output_template: Optional[str]
     repeat_direction: Optional[str]
     repeat_max_rows: Optional[int]
     sort_order: int
@@ -117,3 +126,17 @@ class FormFieldInfo(BaseModel):
     label: str
     example: Optional[str] = None
     is_repeatable: bool = False
+
+
+class FormDataPreviewRow(BaseModel):
+    row_index: int
+    values: dict[str, str]
+
+
+class FormDataPreviewResponse(BaseModel):
+    asset_id: int
+    data_source: str
+    is_repeatable: bool = False
+    total_rows: int = 0
+    truncated: bool = False
+    rows: list[FormDataPreviewRow]

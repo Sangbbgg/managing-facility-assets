@@ -13,6 +13,7 @@ from app.models.collection import AssetCollectRun, AssetNetworkConnection
 from app.models.hw_info import (
     AssetHwCpu,
     AssetHwDisk,
+    AssetHwOptical,
     AssetHwGpu,
     AssetHwMemory,
     AssetHwNic,
@@ -26,6 +27,7 @@ HW_SW_MODELS = [
     AssetHwCpu,
     AssetHwMemory,
     AssetHwDisk,
+    AssetHwOptical,
     AssetHwGpu,
     AssetHwNic,
     AssetSwProduct,
@@ -167,6 +169,23 @@ async def parse_powershell_json(data: dict, asset_id: int, db: AsyncSession) -> 
         )
     if summary_data.get("disk_items") or summary_data.get("storage_devices"):
         summary["disk"] = len(_ensure_list(summary_data.get("disk_items"))) + len(_ensure_list(summary_data.get("storage_devices")))
+
+    optical_items = _normalize_optical_items(summary_data.get("optical_drives") or summary_data.get("optical_devices"))
+    for item in optical_items:
+        db.add(
+            AssetHwOptical(
+                asset_id=asset_id,
+                collected_at=collected_at,
+                name=item.get("name") or item.get("Name"),
+                drive=item.get("drive") or item.get("Drive"),
+                media_type=item.get("media_type") or item.get("MediaType"),
+                status=item.get("status") or item.get("Status"),
+                manufacturer=item.get("manufacturer") or item.get("Manufacturer"),
+                raw_json=item,
+            )
+        )
+    if optical_items:
+        summary["optical"] = len(optical_items)
 
     gpu_items = _dedupe_gpu_items(_ensure_list(summary_data.get("gpu_items")))
     for item in gpu_items:
@@ -614,6 +633,9 @@ def _normalize_collect_payload(data: dict) -> dict:
     if "disk" in data:
         normalized["summary"]["disk_items"] = _ensure_list(data.get("disk"))
 
+    if normalized["summary"].get("optical_devices") and not normalized["summary"].get("optical_drives"):
+        normalized["summary"]["optical_drives"] = _normalize_optical_items(normalized["summary"].get("optical_devices"))
+
     if "gpu" in data:
         normalized["summary"]["gpu_items"] = _ensure_list(data.get("gpu"))
 
@@ -709,6 +731,27 @@ def _normalize_connections(items: list[dict]) -> list[dict]:
             "remote_address": item.get("remote_address") or item.get("RemoteAddress"),
             "state": item.get("state") or item.get("State"),
             "process_name": item.get("process_name") or item.get("ProcessName"),
+            **item,
+        })
+    return rows
+
+
+def _normalize_optical_items(items) -> list[dict]:
+    rows = []
+    for item in _ensure_list(items):
+        if isinstance(item, str):
+            cleaned = _clean(item)
+            if cleaned:
+                rows.append({"name": cleaned})
+            continue
+        if not isinstance(item, dict):
+            continue
+        rows.append({
+            "name": item.get("name") or item.get("Name") or item.get("caption") or item.get("Caption"),
+            "drive": item.get("drive") or item.get("Drive"),
+            "media_type": item.get("media_type") or item.get("MediaType"),
+            "status": item.get("status") or item.get("Status"),
+            "manufacturer": item.get("manufacturer") or item.get("Manufacturer"),
             **item,
         })
     return rows

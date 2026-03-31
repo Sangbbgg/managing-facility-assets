@@ -13,7 +13,7 @@ from app.schemas.form_template import (
     FormTemplateFolderCreate, FormTemplateFolderRead, FormTemplateFolderUpdate,
     FormTemplateUpdate, FormTemplateRead,
     FormMappingCreate, FormMappingUpdate, FormMappingRead,
-    FormMappingBulkSave, FormFieldInfo,
+    FormMappingBulkSave, FormFieldInfo, FormDataPreviewResponse,
 )
 
 router = APIRouter()
@@ -47,6 +47,23 @@ def _serialize_template(template: ReportFormTemplate, mapping_count: int = 0) ->
 async def get_field_catalog():
     from app.services.form_report_builder import FIELD_CATALOG
     return FIELD_CATALOG
+
+
+@router.get("/data-preview", response_model=FormDataPreviewResponse)
+async def get_data_preview(
+    asset_id: int = Query(...),
+    data_source: str = Query(...),
+    max_rows: int = Query(5, ge=1, le=20),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.asset import Asset
+    from app.services.form_report_builder import build_data_source_preview
+
+    asset = await db.get(Asset, asset_id)
+    if not asset:
+        raise HTTPException(404, "asset not found")
+
+    return await build_data_source_preview(data_source, asset_id, db, max_rows=max_rows)
 
 
 @router.get("/folders", response_model=list[FormTemplateFolderRead])

@@ -5,7 +5,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.form_template import ReportFormTemplate, ReportFormMapping
-from app.services.form_report_builder import parse_cell, fetch_data_source, format_value
+from app.services.form_report_builder import (
+    parse_cell,
+    fetch_data_source,
+    format_value,
+    resolve_mapping_value,
+    _resolve_repeat_target,
+)
 
 
 def _color_to_hex(color) -> str | None:
@@ -133,27 +139,33 @@ async def generate_preview_html(
             cell_values[(row, col)] = m.field
             continue
         data = await get_data(m.data_source)
-        if isinstance(data, dict):
-            cell_values[(row, col)] = format_value(data.get(m.field, ""), m.format)
+        cell_values[(row, col)] = resolve_mapping_value(data, m)
 
     repeat_groups = {}
     for m in mappings:
         if not m.repeat_direction:
             continue
         row, col = parse_cell(m.cell)
-        key = (m.data_source, row)
+        direction = m.repeat_direction or "down"
+        anchor = row if direction == "down" else col
+        key = (m.data_source, direction, anchor)
         if key not in repeat_groups:
             repeat_groups[key] = []
         repeat_groups[key].append((m, row, col))
 
-    for (ds, start_row), group in repeat_groups.items():
+    for (ds, direction, _anchor), group in repeat_groups.items():
         data = await get_data(ds)
         if not isinstance(data, list):
             continue
         max_rows = group[0][0].repeat_max_rows or 50
         for i, item in enumerate(data[:max_rows]):
             for m, base_row, base_col in group:
-                cell_values[(base_row + i, base_col)] = format_value(item.get(m.field, ""), m.format)
+                target_row, target_col = _resolve_repeat_target(ws, base_row, base_col, direction, i)
+                cell_values[(target_row, target_col)] = resolve_mapping_value(
+                    item,
+                    m,
+                    count_value=len(data),
+                )
 
     return _sheet_to_html(ws, cell_values)
 

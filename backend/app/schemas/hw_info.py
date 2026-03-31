@@ -72,6 +72,19 @@ class HwDiskRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class HwOpticalRead(BaseModel):
+    id: int
+    asset_id: int
+    collected_at: datetime
+    name: Optional[str] = None
+    drive: Optional[str] = None
+    media_type: Optional[str] = None
+    status: Optional[str] = None
+    manufacturer: Optional[str] = None
+    raw_json: Optional[dict] = None
+    model_config = {"from_attributes": True}
+
+
 class HwGpuRead(BaseModel):
     id: int
     asset_id: int
@@ -106,6 +119,7 @@ class HwAllRead(BaseModel):
     cpus: list[HwCpuRead] = []
     memories: list[HwMemoryRead] = []
     disks: list[HwDiskRead] = []
+    opticals: list[HwOpticalRead] = []
     gpus: list[HwGpuRead] = []
     nics: list[HwNicRead] = []
 

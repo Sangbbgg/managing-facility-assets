@@ -38,6 +38,15 @@
           </div>
         </n-collapse-item>
 
+        <n-collapse-item title="광학 드라이브 정보" name="opticals">
+          <ListHeader title="광학 드라이브 정보" :count="opticals.length" />
+          <div class="table-scroll-wrap">
+            <div class="table-scroll-inner" style="width: 1200px;">
+              <n-data-table :columns="opticalColumns" :data="opticals" size="small" :max-height="260" :scroll-x="1200" />
+            </div>
+          </div>
+        </n-collapse-item>
+
         <n-collapse-item title="GPU 정보" name="gpus">
           <ListHeader title="GPU 정보" :count="gpus.length" />
           <div class="table-scroll-wrap">
@@ -81,11 +90,12 @@ const systems = computed(() => hwStore.all.systems || [])
 const cpus = computed(() => hwStore.all.cpus || [])
 const memories = computed(() => hwStore.all.memories || [])
 const disks = computed(() => hwStore.all.disks || [])
+const opticals = computed(() => hwStore.all.opticals || [])
 const gpus = computed(() => hwStore.all.gpus || [])
 const nics = computed(() => hwStore.all.nics || [])
 
 const hasData = computed(() =>
-  [systems.value, cpus.value, memories.value, disks.value, gpus.value, nics.value].some(
+  [systems.value, cpus.value, memories.value, disks.value, opticals.value, gpus.value, nics.value].some(
     (items) => Array.isArray(items) && items.length > 0
   )
 )
@@ -133,6 +143,15 @@ const diskColumns = [
   { title: '시리얼 번호', key: 'serial_number', width: 180 },
   { title: '미디어 유형', key: 'media_type', width: 120 },
   { title: '파티션 수', key: 'partitions', width: 100 },
+]
+
+const opticalColumns = [
+  { title: '수집일시', key: 'collected_at', width: 160, render: (row) => formatDateTime(row.collected_at) },
+  { title: '드라이브명', key: 'name', width: 300 },
+  { title: '드라이브', key: 'drive', width: 100 },
+  { title: '미디어 유형', key: 'media_type', width: 140 },
+  { title: '상태', key: 'status', width: 120 },
+  { title: '제조사', key: 'manufacturer', width: 160 },
 ]
 
 const gpuColumns = [

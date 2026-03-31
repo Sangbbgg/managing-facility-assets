@@ -3,6 +3,7 @@ import tempfile
 from copy import copy
 from datetime import date, datetime
 from typing import Any
+import json
 
 from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
@@ -12,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.asset import Asset
 from app.models.collection import AssetCollectRun, AssetNetworkConnection
 from app.models.form_template import ReportFormMapping, ReportFormTemplate
-from app.models.hw_info import AssetHwCpu, AssetHwDisk, AssetHwGpu, AssetHwMemory, AssetHwNic, AssetHwSystem
+from app.models.hw_info import AssetHwCpu, AssetHwDisk, AssetHwGpu, AssetHwMemory, AssetHwNic, AssetHwOptical, AssetHwSystem
 from app.models.record import ConsoleAccessRecord, EventLogRecord, InspectionRecord, PasswordRecord, SealRecord
 from app.models.sw_info import AssetSwAccount, AssetSwHotfix, AssetSwProcess, AssetSwProduct
 from app.schemas.form_template import FormFieldInfo
@@ -57,6 +58,7 @@ _DATA_SOURCE_MODELS: dict[str, tuple[Any, bool, Any | None]] = {
     "hw_cpu": (AssetHwCpu, True, AssetHwCpu.collected_at.desc()),
     "hw_memory": (AssetHwMemory, True, AssetHwMemory.collected_at.desc()),
     "hw_disk": (AssetHwDisk, True, AssetHwDisk.collected_at.desc()),
+    "hw_optical": (AssetHwOptical, True, AssetHwOptical.collected_at.desc()),
     "hw_gpu": (AssetHwGpu, True, AssetHwGpu.collected_at.desc()),
     "hw_nic": (AssetHwNic, True, AssetHwNic.collected_at.desc()),
     "sw_product": (AssetSwProduct, True, AssetSwProduct.collected_at.desc()),
@@ -128,6 +130,19 @@ def _build_field_catalog() -> list[FormFieldInfo]:
 FIELD_CATALOG: list[FormFieldInfo] = _build_field_catalog()
 
 
+def _stringify_preview_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (date, datetime)):
+        return str(value)
+    if isinstance(value, (list, dict)):
+        try:
+            return json.dumps(value, ensure_ascii=False)
+        except TypeError:
+            return str(value)
+    return str(value)
+
+
 def parse_cell(cell_str: str) -> tuple[int, int]:
     matched = re.match(r"([A-Z]+)(\d+)", cell_str.upper())
     if not matched:
@@ -135,6 +150,30 @@ def parse_cell(cell_str: str) -> tuple[int, int]:
     col = column_index_from_string(matched.group(1))
     row = int(matched.group(2))
     return row, col
+
+
+def _is_merged_child(ws, row: int, col: int) -> bool:
+    for mr in ws.merged_cells.ranges:
+        if mr.min_row <= row <= mr.max_row and mr.min_col <= col <= mr.max_col:
+            return not (mr.min_row == row and mr.min_col == col)
+    return False
+
+
+def _resolve_repeat_target(ws, base_row: int, base_col: int, direction: str, index: int) -> tuple[int, int]:
+    if direction == "down":
+        target_row = base_row + index
+        while _is_merged_child(ws, target_row, base_col):
+            target_row += 1
+        return target_row, base_col
+
+    target_col = base_col
+    steps = index
+    while steps > 0:
+        target_col += 1
+        while _is_merged_child(ws, base_row, target_col):
+            target_col += 1
+        steps -= 1
+    return base_row, target_col
 
 
 async def fetch_asset_data(asset_id: int, db: AsyncSession) -> dict:
@@ -236,6 +275,52 @@ async def fetch_data_source(data_source: str, asset_id: int, db: AsyncSession):
     return {}
 
 
+async def build_data_source_preview(
+    data_source: str,
+    asset_id: int,
+    db: AsyncSession,
+    max_rows: int = 5,
+) -> dict[str, Any]:
+    data = await fetch_data_source(data_source, asset_id, db)
+    catalog_items = [item for item in FIELD_CATALOG if item.data_source == data_source]
+    field_names = [item.field for item in catalog_items]
+
+    if isinstance(data, list):
+        rows = []
+        for index, item in enumerate(data[:max_rows], start=1):
+            rows.append({
+                "row_index": index,
+                "values": {
+                    field: _stringify_preview_value(item.get(field))
+                    for field in field_names
+                },
+            })
+        return {
+            "asset_id": asset_id,
+            "data_source": data_source,
+            "is_repeatable": True,
+            "total_rows": len(data),
+            "truncated": len(data) > max_rows,
+            "rows": rows,
+        }
+
+    row_values = {
+        field: _stringify_preview_value(data.get(field) if isinstance(data, dict) else None)
+        for field in field_names
+    }
+    return {
+        "asset_id": asset_id,
+        "data_source": data_source,
+        "is_repeatable": False,
+        "total_rows": 1 if any(value != "" for value in row_values.values()) else 0,
+        "truncated": False,
+        "rows": [{
+            "row_index": 1,
+            "values": row_values,
+        }],
+    }
+
+
 def format_value(value, fmt) -> str:
     if value is None:
         return ""
@@ -255,6 +340,70 @@ def format_value(value, fmt) -> str:
         except (ValueError, TypeError):
             return str(value)
     return str(value)
+
+
+def extract_mapped_value(data: Any, field: str):
+    if not field:
+        return ""
+    if isinstance(data, dict):
+        return data.get(field, "")
+    if isinstance(data, list):
+        if not data:
+            return ""
+        first_row = data[0]
+        if isinstance(first_row, dict):
+            return first_row.get(field, "")
+    return ""
+
+
+def _extract_list_field_values(data: Any, field: str) -> list[Any]:
+    if not isinstance(data, list):
+        return []
+    values = []
+    for item in data:
+        if isinstance(item, dict):
+            value = item.get(field, "")
+            if value not in (None, ""):
+                values.append(value)
+    return values
+
+
+def resolve_mapping_value(data: Any, mapping, count_value: int | None = None) -> str:
+    aggregate_mode = getattr(mapping, "aggregate_mode", None) or "value"
+    raw_value = extract_mapped_value(data, mapping.field)
+    secondary_raw_value = extract_mapped_value(data, getattr(mapping, "secondary_field", None))
+    formatted_value = format_value(raw_value, mapping.format)
+    secondary_formatted_value = format_value(secondary_raw_value, mapping.format)
+
+    if isinstance(data, list):
+        values = _extract_list_field_values(data, mapping.field)
+        if aggregate_mode in {"value", "first"}:
+            formatted_value = format_value(values[0] if values else "", mapping.format)
+        elif aggregate_mode == "count":
+            formatted_value = str(len(data))
+        elif aggregate_mode == "join":
+            formatted_value = ", ".join(format_value(value, mapping.format) for value in values)
+        elif aggregate_mode == "join_unique":
+            unique_values = list(dict.fromkeys(values))
+            formatted_value = ", ".join(format_value(value, mapping.format) for value in unique_values)
+
+    derived_count_value = 0
+    if isinstance(data, list):
+        derived_count_value = len(data)
+    elif isinstance(data, dict):
+        derived_count_value = 1 if raw_value not in (None, "") else 0
+    if count_value is None:
+        count_value = derived_count_value
+
+    output_template = getattr(mapping, "output_template", None)
+    if output_template:
+        return (
+            output_template
+            .replace("{value}", formatted_value)
+            .replace("{secondary}", secondary_formatted_value)
+            .replace("{count}", str(count_value))
+        )
+    return formatted_value
 
 
 async def generate_form_report(template_id: int, asset_id: int, db: AsyncSession) -> tuple[str, str]:
@@ -287,18 +436,19 @@ async def generate_form_report(template_id: int, asset_id: int, db: AsyncSession
             ws.cell(row, col).value = mapping.field
             continue
         data = await get_data(mapping.data_source)
-        if isinstance(data, dict):
-            ws.cell(row, col).value = format_value(data.get(mapping.field, ""), mapping.format)
+        ws.cell(row, col).value = resolve_mapping_value(data, mapping)
 
-    repeat_groups: dict[tuple[str, str, int], list[tuple[ReportFormMapping, int, int]]] = {}
+    repeat_groups: dict[tuple[str, str, str, int], list[tuple[ReportFormMapping, int, int]]] = {}
     for mapping in mappings:
         if not mapping.repeat_direction:
             continue
         row, col = parse_cell(mapping.cell)
-        key = (mapping.sheet_name or "", mapping.data_source, row)
+        direction = mapping.repeat_direction or "down"
+        anchor = row if direction == "down" else col
+        key = (mapping.sheet_name or "", mapping.data_source, direction, anchor)
         repeat_groups.setdefault(key, []).append((mapping, row, col))
 
-    for (_sheet_name, data_source, _start_row), group in repeat_groups.items():
+    for (_sheet_name, data_source, direction, _anchor), group in repeat_groups.items():
         data = await get_data(data_source)
         if not isinstance(data, list):
             continue
@@ -306,12 +456,15 @@ async def generate_form_report(template_id: int, asset_id: int, db: AsyncSession
         for index, item in enumerate(data[:max_rows]):
             for mapping, base_row, base_col in group:
                 ws = wb[mapping.sheet_name] if mapping.sheet_name and mapping.sheet_name in wb.sheetnames else wb.active
-                target_row = base_row + index
-                value = item.get(mapping.field, "")
-                ws.cell(target_row, base_col).value = format_value(value, mapping.format)
+                target_row, target_col = _resolve_repeat_target(ws, base_row, base_col, direction, index)
+                ws.cell(target_row, target_col).value = resolve_mapping_value(
+                    item,
+                    mapping,
+                    count_value=len(data),
+                )
                 if index > 0:
                     src_cell = ws.cell(base_row, base_col)
-                    tgt_cell = ws.cell(target_row, base_col)
+                    tgt_cell = ws.cell(target_row, target_col)
                     if src_cell.has_style:
                         tgt_cell.font = copy(src_cell.font)
                         tgt_cell.fill = copy(src_cell.fill)

@@ -75,6 +75,19 @@ class AssetHwDisk(Base):
     raw_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
 
+class AssetHwOptical(Base):
+    __tablename__ = "asset_hw_opticals"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    asset_id: Mapped[int] = mapped_column(ForeignKey("assets.id"), index=True)
+    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    drive: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    media_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    manufacturer: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    raw_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+
+
 class AssetHwGpu(Base):
     __tablename__ = "asset_hw_gpus"
     id: Mapped[int] = mapped_column(primary_key=True)
