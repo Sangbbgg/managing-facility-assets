@@ -1,11 +1,15 @@
 from html import escape
 from openpyxl import load_workbook
-from openpyxl.utils import get_column_letter
+from openpyxl.utils import column_index_from_string, get_column_letter
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.form_template import ReportFormTemplate, ReportFormMapping
 from app.services.form_report_builder import (
+    _get_defined_name_map,
+    _resolve_mapping_anchor,
+    _resolve_page_settings,
+    _resolve_subblock_layout,
     parse_cell,
     fetch_data_source,
     format_value,
@@ -127,6 +131,7 @@ async def generate_preview_html(
         return data_cache[ds]
 
     wb = load_workbook(template.file_path)
+    defined_names = _get_defined_name_map(template.file_path)
     ws = wb.active
 
     cell_values = {}
@@ -134,7 +139,9 @@ async def generate_preview_html(
     for m in mappings:
         if m.repeat_direction:
             continue
-        row, col = parse_cell(m.cell)
+        resolved_sheet_name, row, col = _resolve_mapping_anchor(m, defined_names)
+        if resolved_sheet_name and resolved_sheet_name in wb.sheetnames:
+            ws = wb[resolved_sheet_name]
         if m.data_source == "static":
             cell_values[(row, col)] = m.field
             continue
@@ -145,22 +152,66 @@ async def generate_preview_html(
     for m in mappings:
         if not m.repeat_direction:
             continue
-        row, col = parse_cell(m.cell)
+        resolved_sheet_name, row, col = _resolve_mapping_anchor(m, defined_names)
         direction = m.repeat_direction or "down"
         anchor = row if direction == "down" else col
-        key = (m.data_source, direction, anchor)
+        key = (resolved_sheet_name or m.sheet_name or "", m.data_source, direction, anchor)
         if key not in repeat_groups:
             repeat_groups[key] = []
         repeat_groups[key].append((m, row, col))
 
-    for (ds, direction, _anchor), group in repeat_groups.items():
+    for (_sheet_name, ds, direction, _anchor), group in repeat_groups.items():
         data = await get_data(ds)
         if not isinstance(data, list):
             continue
-        max_rows = group[0][0].repeat_max_rows or 50
+        max_rows = group[0][0].repeat_max_rows
+        if max_rows is None or max_rows <= 0:
+            max_rows = len(data)
         for i, item in enumerate(data[:max_rows]):
             for m, base_row, base_col in group:
-                target_row, target_col = _resolve_repeat_target(ws, base_row, base_col, direction, i)
+                if _sheet_name and _sheet_name in wb.sheetnames:
+                    ws = wb[_sheet_name]
+                if direction == "down" and getattr(m, "overflow_mode", None) == "sheet_right":
+                    page_settings = _resolve_page_settings(m, defined_names)
+                    block_start_row = page_settings["block_start_row"]
+                    block_end_row = page_settings["block_end_row"]
+                    block_start_col = page_settings["block_start_col"]
+                    block_end_col = page_settings["block_end_col"]
+                    page_start_col = page_settings["page_start_col"]
+                    page_end_col = page_settings["page_end_col"]
+                    if all([block_start_row, block_end_row, block_start_col, block_end_col]):
+                        rows_per_block = max(block_end_row - block_start_row + 1, 1)
+                        start_col_idx = column_index_from_string(block_start_col)
+                        end_col_idx = column_index_from_string(block_end_col)
+                        body_width = max(end_col_idx - start_col_idx + 1, 1)
+                        page_start_col_idx = column_index_from_string(page_start_col) if page_start_col else start_col_idx
+                        page_end_col_idx = column_index_from_string(page_end_col) if page_end_col else end_col_idx
+                        page_width = max(page_end_col_idx - page_start_col_idx + 1, 1)
+                        subblock_count, subblock_width = _resolve_subblock_layout(m, body_width, page_width)
+                        block_fill_mode = len(group) == 1 and body_width > 1
+                        if block_fill_mode:
+                            page_capacity = rows_per_block * body_width * subblock_count
+                            page_index = i // page_capacity
+                            page_item_index = i % page_capacity
+                            subblock_index = page_item_index // (rows_per_block * body_width)
+                            block_item_index = page_item_index % (rows_per_block * body_width)
+                            row_offset = block_item_index // body_width
+                            col_in_body = block_item_index % body_width
+                            col_offset = (page_index * page_width) + (subblock_index * subblock_width) + col_in_body
+                            target_col = start_col_idx + col_offset
+                        else:
+                            page_capacity = rows_per_block * subblock_count
+                            page_index = i // page_capacity
+                            page_item_index = i % page_capacity
+                            subblock_index = page_item_index // rows_per_block
+                            row_offset = page_item_index % rows_per_block
+                            col_offset = (page_index * page_width) + (subblock_index * subblock_width)
+                            target_col = base_col + col_offset
+                        target_row = block_start_row + row_offset
+                    else:
+                        target_row, target_col = _resolve_repeat_target(ws, base_row, base_col, direction, i)
+                else:
+                    target_row, target_col = _resolve_repeat_target(ws, base_row, base_col, direction, i)
                 cell_values[(target_row, target_col)] = resolve_mapping_value(
                     item,
                     m,
@@ -194,12 +245,15 @@ async def analyze_template_structure(file_path: str) -> dict:
                     "has_fill": bool(cell.fill and cell.fill.fgColor and _color_to_hex(cell.fill.fgColor)),
                 })
 
+    defined_names = list(_get_defined_name_map(file_path).values())
+
     return {
         "sheet_name": ws.title,
         "max_row": ws.max_row,
         "max_col": ws.max_column,
         "merged_cells": merged_cells,
         "label_cells": label_cells[:200],
+        "defined_names": defined_names,
     }
 
 

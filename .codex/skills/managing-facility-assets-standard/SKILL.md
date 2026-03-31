@@ -11,10 +11,34 @@ Use this skill as the repository-specific source of truth for Codex work in this
 
 1. Read `references/v1-baseline.md`.
 2. Read `references/versioning-rules.md`.
-3. Read `references/current-system-flow.md` when the task touches DB structure, backend routes/services, frontend pages/stores, or end-to-end data flow.
-4. Read `references/v2-frontend-list-standard.md` only when the task touches frontend list or table behavior.
-5. Read `references/v2-powershell-utf8-standard.md` when the task involves reading or verifying Korean text through PowerShell.
-6. Treat the live repository as canonical when older notes or legacy bundles conflict with the current code.
+3. If the task touches Korean text, Korean filenames, Desktop files, Windows paths, or any PowerShell output that may contain Korean, first apply the UTF-8 handling rule below before trusting terminal output.
+4. Read `references/current-system-flow.md` when the task touches DB structure, backend routes/services, frontend pages/stores, or end-to-end data flow.
+5. Read `references/v2-frontend-list-standard.md` only when the task touches frontend list or table behavior.
+6. Read `references/v2-powershell-utf8-standard.md` when the task involves reading or verifying Korean text through PowerShell.
+7. Treat the live repository as canonical when older notes or legacy bundles conflict with the current code.
+
+## Immediate Korean Path Rule
+
+When PowerShell work may involve Korean text or filenames, do this before reading or trusting output:
+
+```powershell
+chcp 65001 > $null
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+```
+
+Then prefer:
+
+```powershell
+Get-Content -Encoding UTF8 <path>
+```
+
+Treat mojibake Korean output as a terminal decoding problem first. This rule also applies to:
+
+- Korean filenames on the Windows Desktop
+- Korean workbook names such as uploaded `.xlsx` templates
+- copied Windows paths that contain Korean folder or file names
 
 ## Codebase Categories
 
@@ -39,6 +63,7 @@ Use this skill as the repository-specific source of truth for Codex work in this
 ### Codex Standards
 
 - Preserve the current stack: FastAPI, async SQLAlchemy, PostgreSQL, Vue 3, Pinia, Axios, Docker Compose.
+- Before reading or verifying any Korean path or filename through PowerShell, apply the UTF-8 session setup from `Immediate Korean Path Rule`.
 - When adding a new SQLAlchemy model, also register it in `backend/app/models/__init__.py`.
 - Prefer extending current flows over creating parallel patterns.
 - Keep schema synchronization additive by default. Do not introduce silent destructive schema mutations.

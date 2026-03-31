@@ -1,12 +1,15 @@
 import re
 import tempfile
+import zipfile
 from copy import copy
 from datetime import date, datetime
 from typing import Any
 import json
+from xml.etree import ElementTree as ET
 
 from openpyxl import load_workbook
-from openpyxl.utils import column_index_from_string
+from openpyxl.utils import column_index_from_string, get_column_letter
+from openpyxl.utils.cell import coordinate_from_string
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -152,6 +155,112 @@ def parse_cell(cell_str: str) -> tuple[int, int]:
     return row, col
 
 
+def _parse_defined_name_reference(reference: str) -> tuple[str, str] | None:
+    ref = (reference or "").strip()
+    if not ref:
+        return None
+    if ref.startswith("="):
+        ref = ref[1:]
+    if "!" not in ref:
+        return None
+    sheet_name, coord = ref.split("!", 1)
+    sheet_name = sheet_name.strip().strip("'").replace("''", "'")
+    coord = coord.strip().replace("$", "")
+    if not coord:
+        return None
+    return sheet_name, coord
+
+
+def _get_defined_name_map(file_path: str | None) -> dict[str, dict]:
+    if not file_path:
+        return {}
+
+    workbook_ns = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    result: dict[str, dict] = {}
+
+    with zipfile.ZipFile(file_path, "r") as archive:
+        workbook_xml = archive.read("xl/workbook.xml")
+    root = ET.fromstring(workbook_xml)
+
+    sheet_names: list[str] = []
+    for sheet_node in root.findall("main:sheets/main:sheet", workbook_ns):
+        name = sheet_node.attrib.get("name")
+        if name:
+            sheet_names.append(name)
+
+    for defined_node in root.findall("main:definedNames/main:definedName", workbook_ns):
+        name = defined_node.attrib.get("name")
+        if not name:
+            continue
+        parsed = _parse_defined_name_reference(defined_node.text or "")
+        if not parsed:
+            continue
+        sheet_name, range_text = parsed
+        local_sheet_id = defined_node.attrib.get("localSheetId")
+        if local_sheet_id is not None and local_sheet_id.isdigit():
+            index = int(local_sheet_id)
+            if 0 <= index < len(sheet_names):
+                sheet_name = sheet_names[index]
+        if ":" in range_text:
+            start_cell, end_cell = range_text.split(":", 1)
+        else:
+            start_cell = range_text
+            end_cell = range_text
+        start_col, start_row = coordinate_from_string(start_cell)
+        end_col, end_row = coordinate_from_string(end_cell)
+        result[name] = {
+            "name": name,
+            "sheet_name": sheet_name,
+            "range": range_text,
+            "start_cell": start_cell,
+            "end_cell": end_cell,
+            "start_row": start_row,
+            "end_row": end_row,
+            "start_col": start_col,
+            "end_col": end_col,
+            "rows": max(end_row - start_row + 1, 1),
+            "cols": max(column_index_from_string(end_col) - column_index_from_string(start_col) + 1, 1),
+            "local_sheet_id": int(local_sheet_id) if local_sheet_id is not None and local_sheet_id.isdigit() else None,
+            "hidden": defined_node.attrib.get("hidden") == "1",
+        }
+    return result
+
+
+def _resolve_mapping_anchor(mapping, defined_names: dict[str, dict]) -> tuple[str | None, int, int]:
+    row, col = parse_cell(mapping.cell)
+    named_range = getattr(mapping, "named_range_name", None)
+    if named_range and named_range in defined_names:
+        info = defined_names[named_range]
+        return info["sheet_name"], row, col
+    return mapping.sheet_name, row, col
+
+
+def _resolve_page_settings(mapping, defined_names: dict[str, dict]) -> dict[str, str | int | None]:
+    result = {
+        "block_start_row": getattr(mapping, "block_start_row", None),
+        "block_end_row": getattr(mapping, "block_end_row", None),
+        "block_start_col": getattr(mapping, "block_start_col", None),
+        "block_end_col": getattr(mapping, "block_end_col", None),
+        "page_start_col": getattr(mapping, "block_start_col", None),
+        "page_end_col": getattr(mapping, "block_end_col", None),
+    }
+    named_range = getattr(mapping, "named_range_name", None)
+    if named_range and named_range in defined_names:
+        body_info = defined_names[named_range]
+        result["block_start_row"] = body_info["start_row"]
+        result["block_end_row"] = body_info["end_row"]
+        result["block_start_col"] = body_info["start_col"]
+        result["block_end_col"] = body_info["end_col"]
+        result["page_start_col"] = body_info["start_col"]
+        result["page_end_col"] = body_info["end_col"]
+    page_range_name = getattr(mapping, "page_range_name", None)
+    if page_range_name and page_range_name in defined_names:
+        page_info = defined_names[page_range_name]
+        result["page_start_col"] = page_info["start_col"]
+        result["page_end_col"] = page_info["end_col"]
+    return result
+
+
 def _is_merged_child(ws, row: int, col: int) -> bool:
     for mr in ws.merged_cells.ranges:
         if mr.min_row <= row <= mr.max_row and mr.min_col <= col <= mr.max_col:
@@ -174,6 +283,134 @@ def _resolve_repeat_target(ws, base_row: int, base_col: int, direction: str, ind
             target_col += 1
         steps -= 1
     return base_row, target_col
+
+
+def _resolve_subblock_layout(mapping, body_width: int, page_width: int) -> tuple[int, int]:
+    configured_count = getattr(mapping, "page_subblock_count", None)
+    configured_width = getattr(mapping, "page_subblock_width", None)
+    auto_count = max(page_width // body_width, 1) if body_width > 0 and page_width >= body_width and page_width % body_width == 0 else 1
+
+    subblock_count = max(configured_count or auto_count, 1)
+    if subblock_count == 1 and auto_count > 1:
+        subblock_count = auto_count
+
+    subblock_width = max(configured_width or body_width, 1)
+    if (configured_width or 1) == 1 and body_width > 1:
+        subblock_width = body_width
+
+    return subblock_count, subblock_width
+
+
+def _copy_cell_range(src_ws, tgt_ws, src_min_row: int, src_max_row: int, src_min_col: int, src_max_col: int, col_offset: int = 0) -> None:
+    merge_targets: list[tuple[int, int, int, int]] = []
+    for merge_range in list(src_ws.merged_cells.ranges):
+        if (
+            merge_range.min_row >= src_min_row
+            and merge_range.max_row <= src_max_row
+            and merge_range.min_col >= src_min_col
+            and merge_range.max_col <= src_max_col
+        ):
+            merge_targets.append((
+                merge_range.min_row,
+                merge_range.min_col + col_offset,
+                merge_range.max_row,
+                merge_range.max_col + col_offset,
+            ))
+
+    for row in range(src_min_row, src_max_row + 1):
+        target_row = row
+        tgt_ws.row_dimensions[target_row].height = src_ws.row_dimensions[row].height
+        for col in range(src_min_col, src_max_col + 1):
+            if _is_merged_child(src_ws, row, col):
+                continue
+            if _is_merged_child(tgt_ws, row, col + col_offset):
+                continue
+            src_cell = src_ws.cell(row, col)
+            tgt_cell = tgt_ws.cell(row, col + col_offset)
+            tgt_cell.value = src_cell.value
+            if src_cell.has_style:
+                tgt_cell.font = copy(src_cell.font)
+                tgt_cell.fill = copy(src_cell.fill)
+                tgt_cell.border = copy(src_cell.border)
+                tgt_cell.alignment = copy(src_cell.alignment)
+                tgt_cell.number_format = src_cell.number_format
+                tgt_cell.protection = copy(src_cell.protection)
+            if src_cell.hyperlink:
+                tgt_cell._hyperlink = copy(src_cell.hyperlink)
+            if src_cell.comment:
+                tgt_cell.comment = copy(src_cell.comment)
+
+    for col in range(src_min_col, src_max_col + 1):
+        src_letter = get_column_letter(col)
+        tgt_letter = get_column_letter(col + col_offset)
+        tgt_ws.column_dimensions[tgt_letter].width = src_ws.column_dimensions[src_letter].width
+        tgt_ws.column_dimensions[tgt_letter].hidden = src_ws.column_dimensions[src_letter].hidden
+
+    existing_merges = {str(item) for item in tgt_ws.merged_cells.ranges}
+    for min_row, min_col, max_row, max_col in merge_targets:
+        ref = f"{get_column_letter(min_col)}{min_row}:{get_column_letter(max_col)}{max_row}"
+        if ref not in existing_merges:
+            tgt_ws.merge_cells(ref)
+
+def _resolve_block_repeat_target(ws, template_ws, mapping, base_row: int, base_col: int, index: int, copied_pages: set[int], defined_names: dict[str, dict], group_size: int = 1) -> tuple[int, int]:
+    if getattr(mapping, "overflow_mode", None) != "sheet_right":
+        return _resolve_repeat_target(ws, base_row, base_col, "down", index)
+
+    page_settings = _resolve_page_settings(mapping, defined_names)
+    block_start_row = page_settings["block_start_row"]
+    block_end_row = page_settings["block_end_row"]
+    block_start_col = page_settings["block_start_col"]
+    block_end_col = page_settings["block_end_col"]
+    page_start_col = page_settings["page_start_col"]
+    page_end_col = page_settings["page_end_col"]
+    if not all([block_start_row, block_end_row, block_start_col, block_end_col]):
+        return _resolve_repeat_target(ws, base_row, base_col, "down", index)
+
+    rows_per_block = max(block_end_row - block_start_row + 1, 1)
+    start_col_idx = column_index_from_string(block_start_col)
+    end_col_idx = column_index_from_string(block_end_col)
+    body_width = max(end_col_idx - start_col_idx + 1, 1)
+    page_start_col_idx = column_index_from_string(page_start_col) if page_start_col else start_col_idx
+    page_end_col_idx = column_index_from_string(page_end_col) if page_end_col else end_col_idx
+    page_width = max(page_end_col_idx - page_start_col_idx + 1, 1)
+    subblock_count, subblock_width = _resolve_subblock_layout(mapping, body_width, page_width)
+    block_fill_mode = group_size == 1 and body_width > 1
+
+    if block_fill_mode:
+        page_capacity = rows_per_block * body_width * subblock_count
+        page_index = index // page_capacity
+        page_item_index = index % page_capacity
+        subblock_index = page_item_index // (rows_per_block * body_width)
+        block_item_index = page_item_index % (rows_per_block * body_width)
+        row_offset = block_item_index // body_width
+        col_in_body = block_item_index % body_width
+        col_offset = (page_index * page_width) + (subblock_index * subblock_width) + col_in_body
+        target_col = start_col_idx + col_offset
+    else:
+        page_capacity = rows_per_block * subblock_count
+        page_index = index // page_capacity
+        page_item_index = index % page_capacity
+        subblock_index = page_item_index // rows_per_block
+        row_offset = page_item_index % rows_per_block
+        col_offset = (page_index * page_width) + (subblock_index * subblock_width)
+        target_col = base_col + col_offset
+
+    if page_index > 0 and page_index not in copied_pages:
+        _copy_cell_range(
+            template_ws,
+            ws,
+            1,
+            template_ws.max_row or block_end_row,
+            page_start_col_idx,
+            page_end_col_idx,
+            col_offset=page_index * page_width,
+        )
+        copied_pages.add(page_index)
+
+    target_row = block_start_row + row_offset
+    while _is_merged_child(ws, target_row, target_col):
+        target_row += 1
+    return target_row, target_col
 
 
 async def fetch_asset_data(asset_id: int, db: AsyncSession) -> dict:
@@ -425,13 +662,16 @@ async def generate_form_report(template_id: int, asset_id: int, db: AsyncSession
             data_cache[source] = await fetch_data_source(source, asset_id, db)
         return data_cache[source]
 
+    template_wb = load_workbook(template.file_path)
     wb = load_workbook(template.file_path)
+    defined_names = _get_defined_name_map(template.file_path)
 
     for mapping in mappings:
         if mapping.repeat_direction:
             continue
-        ws = wb[mapping.sheet_name] if mapping.sheet_name and mapping.sheet_name in wb.sheetnames else wb.active
-        row, col = parse_cell(mapping.cell)
+        resolved_sheet_name, row, col = _resolve_mapping_anchor(mapping, defined_names)
+        ws_name = resolved_sheet_name if resolved_sheet_name and resolved_sheet_name in wb.sheetnames else mapping.sheet_name
+        ws = wb[ws_name] if ws_name and ws_name in wb.sheetnames else wb.active
         if mapping.data_source == "static":
             ws.cell(row, col).value = mapping.field
             continue
@@ -442,21 +682,39 @@ async def generate_form_report(template_id: int, asset_id: int, db: AsyncSession
     for mapping in mappings:
         if not mapping.repeat_direction:
             continue
-        row, col = parse_cell(mapping.cell)
+        resolved_sheet_name, row, col = _resolve_mapping_anchor(mapping, defined_names)
         direction = mapping.repeat_direction or "down"
         anchor = row if direction == "down" else col
-        key = (mapping.sheet_name or "", mapping.data_source, direction, anchor)
+        key = (resolved_sheet_name or mapping.sheet_name or "", mapping.data_source, direction, anchor)
         repeat_groups.setdefault(key, []).append((mapping, row, col))
 
     for (_sheet_name, data_source, direction, _anchor), group in repeat_groups.items():
         data = await get_data(data_source)
         if not isinstance(data, list):
             continue
-        max_rows = group[0][0].repeat_max_rows or 50
+        max_rows = group[0][0].repeat_max_rows
+        if max_rows is None or max_rows <= 0:
+            max_rows = len(data)
+        copied_pages: set[int] = set()
         for index, item in enumerate(data[:max_rows]):
             for mapping, base_row, base_col in group:
-                ws = wb[mapping.sheet_name] if mapping.sheet_name and mapping.sheet_name in wb.sheetnames else wb.active
-                target_row, target_col = _resolve_repeat_target(ws, base_row, base_col, direction, index)
+                ws_name = _sheet_name if _sheet_name and _sheet_name in wb.sheetnames else mapping.sheet_name
+                ws = wb[ws_name] if ws_name and ws_name in wb.sheetnames else wb.active
+                template_ws = template_wb[ws_name] if ws_name and ws_name in template_wb.sheetnames else template_wb.active
+                if direction == "down":
+                    target_row, target_col = _resolve_block_repeat_target(
+                        ws,
+                        template_ws,
+                        mapping,
+                        base_row,
+                        base_col,
+                        index,
+                        copied_pages,
+                        defined_names,
+                        len(group),
+                    )
+                else:
+                    target_row, target_col = _resolve_repeat_target(ws, base_row, base_col, direction, index)
                 ws.cell(target_row, target_col).value = resolve_mapping_value(
                     item,
                     mapping,

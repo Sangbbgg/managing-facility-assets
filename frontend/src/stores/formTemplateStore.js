@@ -11,6 +11,7 @@ export const useFormTemplateStore = defineStore('formTemplate', () => {
   const loading = ref(false)
   const previewHtml = ref('')
   const workbookPreview = ref(null)
+  const templateAnalysis = ref(null)
   const previewWorkbookBinary = ref(null)
   const previewWorkbookName = ref('')
   const dataPreview = ref(null)
@@ -140,6 +141,21 @@ export const useFormTemplateStore = defineStore('formTemplate', () => {
     workbookPreview.value = null
   }
 
+  async function fetchTemplateAnalysis(templateId) {
+    loading.value = true
+    try {
+      const { data } = await formTemplatesApi.analyze(templateId)
+      templateAnalysis.value = data
+      return data
+    } finally {
+      loading.value = false
+    }
+  }
+
+  function clearTemplateAnalysis() {
+    templateAnalysis.value = null
+  }
+
   function clearRenderedPreview() {
     previewWorkbookBinary.value = null
     previewWorkbookName.value = ''
@@ -168,11 +184,11 @@ export const useFormTemplateStore = defineStore('formTemplate', () => {
   }
 
   return {
-    folders, templates, currentTemplate, mappings, fieldCatalog, loading, previewHtml, workbookPreview, previewWorkbookBinary, previewWorkbookName, dataPreview,
+    folders, templates, currentTemplate, mappings, fieldCatalog, loading, previewHtml, workbookPreview, templateAnalysis, previewWorkbookBinary, previewWorkbookName, dataPreview,
     fetchFolders, fetchList, fetchOne, create, update, remove,
     createFolder, updateFolder, removeFolder,
     fetchMappings, bulkSaveMappings,
-    fetchFieldCatalog, fetchPreview, fetchWorkbookPreview, clearWorkbookPreview,
+    fetchFieldCatalog, fetchPreview, fetchWorkbookPreview, clearWorkbookPreview, fetchTemplateAnalysis, clearTemplateAnalysis,
     clearRenderedPreview, fetchDataPreview, clearDataPreview, downloadReport,
   }
 })

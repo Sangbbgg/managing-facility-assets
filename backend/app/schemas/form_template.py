@@ -68,6 +68,15 @@ class FormMappingCreate(BaseModel):
     output_template: Optional[str] = None
     repeat_direction: Optional[str] = None
     repeat_max_rows: Optional[int] = None
+    named_range_name: Optional[str] = None
+    page_range_name: Optional[str] = None
+    overflow_mode: Optional[str] = None
+    block_start_row: Optional[int] = None
+    block_end_row: Optional[int] = None
+    block_start_col: Optional[str] = None
+    block_end_col: Optional[str] = None
+    page_subblock_count: Optional[int] = None
+    page_subblock_width: Optional[int] = None
     sort_order: int = 0
 
 
@@ -83,6 +92,15 @@ class FormMappingUpdate(BaseModel):
     output_template: Optional[str] = None
     repeat_direction: Optional[str] = None
     repeat_max_rows: Optional[int] = None
+    named_range_name: Optional[str] = None
+    page_range_name: Optional[str] = None
+    overflow_mode: Optional[str] = None
+    block_start_row: Optional[int] = None
+    block_end_row: Optional[int] = None
+    block_start_col: Optional[str] = None
+    block_end_col: Optional[str] = None
+    page_subblock_count: Optional[int] = None
+    page_subblock_width: Optional[int] = None
     sort_order: Optional[int] = None
 
 
@@ -100,6 +118,15 @@ class FormMappingRead(BaseModel):
     output_template: Optional[str]
     repeat_direction: Optional[str]
     repeat_max_rows: Optional[int]
+    named_range_name: Optional[str]
+    page_range_name: Optional[str]
+    overflow_mode: Optional[str]
+    block_start_row: Optional[int]
+    block_end_row: Optional[int]
+    block_start_col: Optional[str]
+    block_end_col: Optional[str]
+    page_subblock_count: Optional[int]
+    page_subblock_width: Optional[int]
     sort_order: int
 
     model_config = {"from_attributes": True}

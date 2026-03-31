@@ -26,13 +26,24 @@
         </n-card>
       </div>
 
-      <FormTemplateWorkbookPreview
-        v-if="showPreview"
-        :template="selectedTemplate"
-        :mappings="store.mappings"
-        :selected-cell="selectedCell"
-        @select-cell="handleSelectCell"
-      />
+      <div v-if="showPreview" class="preview-pane">
+        <div v-if="selectionMode !== 'cell'" class="selection-banner">
+          {{ selectionMode === 'row-range'
+            ? '행 범위 선택 중입니다. 시작 행을 클릭한 뒤 마지막 행을 클릭하거나 드래그하세요.'
+            : '열 범위 선택 중입니다. 시작 열을 클릭한 뒤 마지막 열을 클릭하거나 드래그하세요.' }}
+        </div>
+        <FormTemplateWorkbookPreview
+          :template="selectedTemplate"
+          :mappings="store.mappings"
+          :selected-cell="selectedCell"
+          :selection-mode="selectionMode"
+          :selected-row-range="selectedRowRange"
+          :selected-col-range="selectedColRange"
+          @select-cell="handleSelectCell"
+          @select-row-range="handleSelectRowRange"
+          @select-col-range="handleSelectColRange"
+        />
+      </div>
     </div>
 
     <n-modal
@@ -138,6 +149,16 @@
                     placeholder="필드를 선택해 주세요"
                   />
                 </n-form-item>
+                <n-form-item label="정의된 이름 연결">
+                  <n-select
+                    v-model:value="mappingForm.named_range_name"
+                    :options="definedNameOptions"
+                    filterable
+                    clearable
+                    placeholder="엑셀에서 지정한 이름을 선택해 주세요"
+                    @update:value="applyNamedRange"
+                  />
+                </n-form-item>
                 <n-form-item label="보조 필드">
                   <n-select
                     v-model:value="mappingForm.secondary_field"
@@ -183,8 +204,101 @@
                   />
                 </n-form-item>
                 <n-form-item v-if="mappingForm.repeat_direction" label="최대 개수">
-                  <n-input-number v-model:value="mappingForm.repeat_max_rows" :min="1" :max="200" />
+                  <n-input-number v-model:value="mappingForm.repeat_max_rows" :min="1" :max="100000" />
                 </n-form-item>
+                <n-form-item v-if="mappingForm.repeat_direction === 'down'" label="넘침 처리">
+                  <n-select
+                    v-model:value="mappingForm.overflow_mode"
+                    :options="overflowModeOptions"
+                    placeholder="확장 없음"
+                  />
+                </n-form-item>
+                <template v-if="mappingForm.repeat_direction === 'down' && mappingForm.overflow_mode === 'sheet_right'">
+                  <div class="overflow-config-panel">
+                    <div class="overflow-config-header">
+                      <div class="mapping-list-header">같은 시트 확장 설정</div>
+                      <div class="overflow-config-subtitle">
+                        페이지 블록 범위를 지정하면 마지막 행을 넘을 때 같은 시트 오른쪽으로 양식을 복제합니다.
+                      </div>
+                    </div>
+                    <div class="overflow-grid overflow-grid-top">
+                      <div class="overflow-field">
+                        <div class="overflow-label">본문 이름</div>
+                        <n-select
+                          v-model:value="mappingForm.named_range_name"
+                          :options="bodyRangeOptions"
+                          filterable
+                          clearable
+                          placeholder="예: 프로그램본문"
+                          @update:value="applyNamedRange"
+                        />
+                      </div>
+                      <div class="overflow-field">
+                        <div class="overflow-label">페이지 이름</div>
+                        <n-select
+                          v-model:value="mappingForm.page_range_name"
+                          :options="pageRangeOptions"
+                          filterable
+                          clearable
+                          placeholder="예: 프로그램페이지"
+                          @update:value="applyPageRange"
+                        />
+                      </div>
+                    </div>
+                    <div class="selection-help compact">
+                      <div>1. 시작 셀을 선택합니다.</div>
+                      <div>2. `행 범위 선택` 후 시작 행과 마지막 행을 클릭하거나 드래그합니다.</div>
+                      <div>3. `열 범위 선택` 후 시작 열과 마지막 열을 클릭하거나 드래그합니다.</div>
+                    </div>
+                    <div v-if="selectionMode !== 'cell'" class="selection-status">
+                      {{ selectionMode === 'row-range' ? '행 범위 선택 중: 시작 행 클릭 후 마지막 행을 클릭하거나 위아래로 드래그하세요.' : '열 범위 선택 중: 시작 열 클릭 후 마지막 열을 클릭하거나 좌우로 드래그하세요.' }}
+                    </div>
+                    <div class="overflow-grid">
+                      <div class="overflow-field">
+                        <div class="overflow-label">데이터 시작 행</div>
+                        <n-input-number v-model:value="mappingForm.block_start_row" :min="1" :max="5000" />
+                      </div>
+                      <div class="overflow-field">
+                        <div class="overflow-label">데이터 마지막 행</div>
+                        <n-input-number v-model:value="mappingForm.block_end_row" :min="1" :max="5000" />
+                      </div>
+                      <div class="overflow-field overflow-field-action">
+                        <n-button secondary block @click="startRowRangeSelection">행 범위 선택</n-button>
+                      </div>
+                      <div class="overflow-field">
+                        <div class="overflow-label">행 범위 요약</div>
+                        <div class="overflow-summary">
+                          {{ mappingForm.block_start_row && mappingForm.block_end_row ? `${mappingForm.block_start_row} ~ ${mappingForm.block_end_row}` : '아직 선택되지 않았습니다.' }}
+                        </div>
+                      </div>
+                      <div class="overflow-field">
+                        <div class="overflow-label">양식 시작 열</div>
+                        <n-input v-model:value="mappingForm.block_start_col" placeholder="예: A" />
+                      </div>
+                      <div class="overflow-field">
+                        <div class="overflow-label">양식 마지막 열</div>
+                        <n-input v-model:value="mappingForm.block_end_col" placeholder="예: F" />
+                      </div>
+                      <div class="overflow-field overflow-field-action">
+                        <n-button secondary block @click="startColRangeSelection">열 범위 선택</n-button>
+                      </div>
+                      <div class="overflow-field">
+                        <div class="overflow-label">열 범위 요약</div>
+                        <div class="overflow-summary">
+                          {{ mappingForm.block_start_col && mappingForm.block_end_col ? `${mappingForm.block_start_col} ~ ${mappingForm.block_end_col}` : '아직 선택되지 않았습니다.' }}
+                        </div>
+                      </div>
+                      <div class="overflow-field">
+                        <div class="overflow-label">페이지 내 블록 수</div>
+                        <n-input-number v-model:value="mappingForm.page_subblock_count" :min="1" :max="50" />
+                      </div>
+                      <div class="overflow-field">
+                        <div class="overflow-label">블록 너비(열 수)</div>
+                        <n-input-number v-model:value="mappingForm.page_subblock_width" :min="1" :max="50" />
+                      </div>
+                    </div>
+                  </div>
+                </template>
               </n-form>
 
               <div class="mapping-side">
@@ -258,6 +372,15 @@
                         <span v-if="mapping.repeat_direction" class="mapping-repeat">
                           {{ repeatDirectionMap[mapping.repeat_direction] || mapping.repeat_direction }}
                         </span>
+                        <span v-if="mapping.overflow_mode === 'sheet_right'" class="mapping-repeat">
+                          같은 시트 확장
+                        </span>
+                        <span
+                          v-if="mapping.overflow_mode === 'sheet_right' && (mapping.page_subblock_count || 1) > 1"
+                          class="mapping-repeat"
+                        >
+                          페이지 {{ mapping.page_subblock_count }}블록
+                        </span>
                       </div>
                       <n-button size="tiny" type="error" @click.stop="removeMapping(mapping)">
                         삭제
@@ -312,6 +435,9 @@ const uploadFile = ref(null)
 const showPreview = ref(true)
 const templateForm = ref(emptyTemplateForm())
 const selectedCell = ref(null)
+const selectionMode = ref('cell')
+const pendingRowRangeAnchor = ref(null)
+const pendingColRangeAnchor = ref(null)
 const mappingSaving = ref(false)
 const mappingForm = ref(emptyMappingForm())
 const previewLoading = ref(false)
@@ -337,6 +463,11 @@ const repeatDirectionOptions = [
   { label: '오른쪽', value: 'right' },
 ]
 
+const overflowModeOptions = [
+  { label: '확장 없음', value: null },
+  { label: '같은 시트 오른쪽 복제', value: 'sheet_right' },
+]
+
 const aggregateOptionMap = {
   value: '기본값',
   first: '첫 번째 값',
@@ -359,6 +490,34 @@ const selectedCellLabel = computed(() =>
     ? `${selectedCell.value.sheetName || '-'} / ${selectedCell.value.cell}`
     : '',
 )
+const selectedRowRange = computed(() => {
+  if (
+    !selectedCell.value?.sheetName
+    || !mappingForm.value.block_start_row
+    || !mappingForm.value.block_end_row
+  ) {
+    return null
+  }
+  return {
+    sheetName: selectedCell.value.sheetName,
+    startRow: Math.min(mappingForm.value.block_start_row, mappingForm.value.block_end_row),
+    endRow: Math.max(mappingForm.value.block_start_row, mappingForm.value.block_end_row),
+  }
+})
+const selectedColRange = computed(() => {
+  if (
+    !selectedCell.value?.sheetName
+    || !mappingForm.value.block_start_col
+    || !mappingForm.value.block_end_col
+  ) {
+    return null
+  }
+  return {
+    sheetName: selectedCell.value.sheetName,
+    startCol: normalizeColumnLabel(mappingForm.value.block_start_col),
+    endCol: normalizeColumnLabel(mappingForm.value.block_end_col),
+  }
+})
 
 const folderOptions = computed(() =>
   store.folders.map((folder) => ({
@@ -390,6 +549,33 @@ const fieldOptions = computed(() =>
 
 const secondaryFieldOptions = computed(() =>
   fieldOptions.value.filter((item) => item.value !== mappingForm.value.field),
+)
+
+const definedNameInfos = computed(() => store.templateAnalysis?.defined_names || [])
+
+const definedNameOptions = computed(() =>
+  definedNameInfos.value.map((item) => ({
+    label: `${item.name} · ${item.sheet_name} · ${item.range}`,
+    value: item.name,
+  })),
+)
+
+const bodyRangeOptions = computed(() =>
+  definedNameInfos.value
+    .filter((item) => !item.is_single_cell)
+    .map((item) => ({
+      label: `${item.name} · ${item.sheet_name} · ${item.range}`,
+      value: item.name,
+    })),
+)
+
+const pageRangeOptions = computed(() =>
+  definedNameInfos.value
+    .filter((item) => !item.is_single_cell)
+    .map((item) => ({
+      label: `${item.name} · ${item.sheet_name} · ${item.range}`,
+      value: item.name,
+    })),
 )
 
 const selectedFieldMeta = computed(() =>
@@ -528,6 +714,15 @@ function emptyMappingForm() {
     output_template: '',
     repeat_direction: null,
     repeat_max_rows: 10,
+    named_range_name: null,
+    page_range_name: null,
+    overflow_mode: null,
+    block_start_row: null,
+    block_end_row: null,
+    block_start_col: '',
+    block_end_col: '',
+    page_subblock_count: 1,
+    page_subblock_width: 1,
   }
 }
 
@@ -563,10 +758,16 @@ function closeModal() {
 
 function resetMappingForm() {
   mappingForm.value = emptyMappingForm()
+  selectionMode.value = 'cell'
+  pendingRowRangeAnchor.value = null
+  pendingColRangeAnchor.value = null
 }
 
 function closeMappingModal() {
   showMappingModal.value = false
+  selectionMode.value = 'cell'
+  pendingRowRangeAnchor.value = null
+  pendingColRangeAnchor.value = null
 }
 
 function togglePreview() {
@@ -576,17 +777,22 @@ function togglePreview() {
 async function handleSelect(template) {
   selectedTemplateId.value = template?.id || null
   selectedCell.value = null
+  selectionMode.value = 'cell'
+  pendingRowRangeAnchor.value = null
+  pendingColRangeAnchor.value = null
   closeMappingModal()
   resetMappingForm()
   store.clearDataPreview()
   if (!template?.id) {
     store.clearWorkbookPreview()
+    store.clearTemplateAnalysis()
     store.mappings = []
     return
   }
   await Promise.all([
     store.fetchMappings(template.id),
     store.fetchFieldCatalog(),
+    store.fetchTemplateAnalysis(template.id),
   ])
 }
 
@@ -623,10 +829,61 @@ function applyMappingToForm(mapping) {
     output_template: mapping.output_template || '',
     repeat_direction: mapping.repeat_direction || null,
     repeat_max_rows: mapping.repeat_max_rows || 10,
+    named_range_name: mapping.named_range_name || null,
+    page_range_name: mapping.page_range_name || null,
+    overflow_mode: mapping.overflow_mode || null,
+    block_start_row: mapping.block_start_row || null,
+    block_end_row: mapping.block_end_row || null,
+    block_start_col: mapping.block_start_col || '',
+    block_end_col: mapping.block_end_col || '',
+    page_subblock_count: mapping.page_subblock_count || 1,
+    page_subblock_width: mapping.page_subblock_width || 1,
   }
 }
 
+function applyNamedRange(namedRangeName) {
+  mappingForm.value.named_range_name = namedRangeName || null
+  if (!namedRangeName) {
+    return
+  }
+  const info = (store.templateAnalysis?.defined_names || []).find((item) => item.name === namedRangeName)
+  if (!info) {
+    return
+  }
+  if (!selectedCell.value?.cell) {
+    selectedCell.value = {
+      sheetName: info.sheet_name || '',
+      cell: info.start_cell,
+    }
+  } else if (!selectedCell.value?.sheetName && info.sheet_name) {
+    selectedCell.value = {
+      ...selectedCell.value,
+      sheetName: info.sheet_name,
+    }
+  }
+  if (!info.is_single_cell) {
+    mappingForm.value.block_start_row = info.start_row
+    mappingForm.value.block_end_row = info.end_row
+  }
+}
+
+function applyPageRange(pageRangeName) {
+  mappingForm.value.page_range_name = pageRangeName || null
+  if (!pageRangeName) {
+    return
+  }
+  const info = (store.templateAnalysis?.defined_names || []).find((item) => item.name === pageRangeName)
+  if (!info) {
+    return
+  }
+  mappingForm.value.block_start_col = info.start_col
+  mappingForm.value.block_end_col = info.end_col
+}
+
 function handleSelectCell(cellInfo) {
+  if (selectionMode.value !== 'cell') {
+    selectionMode.value = 'cell'
+  }
   selectedCell.value = cellInfo
   const existing = store.mappings.find(
     (item) =>
@@ -639,6 +896,83 @@ function handleSelectCell(cellInfo) {
     resetMappingForm()
   }
   showMappingModal.value = true
+}
+
+function startRowRangeSelection() {
+  if (!selectedTemplate.value || !selectedCell.value?.sheetName) {
+    message.warning('먼저 매핑할 셀을 선택한 뒤 범위를 지정해주세요.')
+    return
+  }
+  selectionMode.value = 'row-range'
+  pendingRowRangeAnchor.value = null
+  showMappingModal.value = false
+  message.info('매핑 창을 닫았습니다. 워크북에서 시작 행을 클릭한 뒤 마지막 행을 다시 클릭하거나 드래그하세요.')
+}
+
+function startColRangeSelection() {
+  if (!selectedTemplate.value || !selectedCell.value?.sheetName) {
+    message.warning('먼저 매핑할 셀을 선택한 뒤 범위를 지정해주세요.')
+    return
+  }
+  selectionMode.value = 'col-range'
+  pendingColRangeAnchor.value = null
+  showMappingModal.value = false
+  message.info('매핑 창을 닫았습니다. 워크북에서 시작 열을 클릭한 뒤 마지막 열을 다시 클릭하거나 드래그하세요.')
+}
+
+function handleSelectRowRange(rangeInfo) {
+  if (selectionMode.value !== 'row-range') {
+    return
+  }
+  if ((selectedCell.value?.sheetName || '') !== (rangeInfo.sheetName || '')) {
+    message.warning('같은 시트 안에서 행 범위를 선택해주세요.')
+    return
+  }
+  if (
+    rangeInfo.startRow === rangeInfo.endRow
+    && pendingRowRangeAnchor.value == null
+  ) {
+    pendingRowRangeAnchor.value = rangeInfo.startRow
+    message.info(`시작 행 ${rangeInfo.startRow}을 선택했습니다. 마지막 행을 클릭하거나 드래그하세요.`)
+    return
+  }
+  const startRow = pendingRowRangeAnchor.value ?? rangeInfo.startRow
+  mappingForm.value.block_start_row = Math.min(startRow, rangeInfo.endRow)
+  mappingForm.value.block_end_row = Math.max(startRow, rangeInfo.endRow)
+  pendingRowRangeAnchor.value = null
+  selectionMode.value = 'cell'
+  showMappingModal.value = true
+  message.success(`행 범위를 ${mappingForm.value.block_start_row}~${mappingForm.value.block_end_row}로 반영했습니다.`)
+}
+
+function handleSelectColRange(rangeInfo) {
+  if (selectionMode.value !== 'col-range') {
+    return
+  }
+  if ((selectedCell.value?.sheetName || '') !== (rangeInfo.sheetName || '')) {
+    message.warning('같은 시트 안에서 열 범위를 선택해주세요.')
+    return
+  }
+  const startCol = pendingColRangeAnchor.value
+    ? normalizeColumnLabel(pendingColRangeAnchor.value)
+    : normalizeColumnLabel(rangeInfo.startCol)
+  const endCol = normalizeColumnLabel(rangeInfo.endCol)
+  if (
+    rangeInfo.startCol === rangeInfo.endCol
+    && pendingColRangeAnchor.value == null
+  ) {
+    pendingColRangeAnchor.value = endCol
+    message.info(`시작 열 ${endCol}을 선택했습니다. 마지막 열을 클릭하거나 드래그하세요.`)
+    return
+  }
+  const startIndex = decodeColumnLabel(startCol)
+  const endIndex = decodeColumnLabel(endCol)
+  mappingForm.value.block_start_col = startIndex <= endIndex ? startCol : endCol
+  mappingForm.value.block_end_col = startIndex <= endIndex ? endCol : startCol
+  pendingColRangeAnchor.value = null
+  selectionMode.value = 'cell'
+  showMappingModal.value = true
+  message.success(`열 범위를 ${mappingForm.value.block_start_col}~${mappingForm.value.block_end_col}로 반영했습니다.`)
 }
 
 function isSelectedMapping(mapping) {
@@ -682,6 +1016,27 @@ async function saveSelectedMapping() {
       output_template: mappingForm.value.output_template || null,
       repeat_direction: mappingForm.value.repeat_direction || null,
       repeat_max_rows: mappingForm.value.repeat_direction ? mappingForm.value.repeat_max_rows : null,
+      named_range_name: mappingForm.value.named_range_name || null,
+      page_range_name: mappingForm.value.page_range_name || null,
+      overflow_mode: mappingForm.value.repeat_direction === 'down' ? (mappingForm.value.overflow_mode || null) : null,
+      block_start_row: mappingForm.value.repeat_direction === 'down' && mappingForm.value.overflow_mode === 'sheet_right'
+        ? mappingForm.value.block_start_row
+        : null,
+      block_end_row: mappingForm.value.repeat_direction === 'down' && mappingForm.value.overflow_mode === 'sheet_right'
+        ? mappingForm.value.block_end_row
+        : null,
+      block_start_col: mappingForm.value.repeat_direction === 'down' && mappingForm.value.overflow_mode === 'sheet_right'
+        ? (mappingForm.value.block_start_col || null)
+        : null,
+      block_end_col: mappingForm.value.repeat_direction === 'down' && mappingForm.value.overflow_mode === 'sheet_right'
+        ? (mappingForm.value.block_end_col || null)
+        : null,
+      page_subblock_count: mappingForm.value.repeat_direction === 'down' && mappingForm.value.overflow_mode === 'sheet_right'
+        ? (mappingForm.value.page_subblock_count || 1)
+        : null,
+      page_subblock_width: mappingForm.value.repeat_direction === 'down' && mappingForm.value.overflow_mode === 'sheet_right'
+        ? (mappingForm.value.page_subblock_width || 1)
+        : null,
       sort_order: nextMappings.length,
     })
     await store.bulkSaveMappings(selectedTemplateId.value, nextMappings)
@@ -692,6 +1047,26 @@ async function saveSelectedMapping() {
   } finally {
     mappingSaving.value = false
   }
+}
+
+function normalizeColumnLabel(value) {
+  return String(value || '').trim().toUpperCase()
+}
+
+function decodeColumnLabel(value) {
+  const normalized = normalizeColumnLabel(value)
+  if (!normalized) {
+    return -1
+  }
+  let result = 0
+  for (const char of normalized) {
+    const code = char.charCodeAt(0)
+    if (code < 65 || code > 90) {
+      return -1
+    }
+    result = (result * 26) + (code - 64)
+  }
+  return result
 }
 
 async function removeMapping(mapping) {
@@ -816,6 +1191,12 @@ watch(
   grid-template-columns: minmax(320px, 380px);
 }
 
+.preview-pane {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
 .left-column {
   min-width: 0;
 }
@@ -930,6 +1311,111 @@ watch(
   color: #64748b;
 }
 
+.range-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.range-field :deep(.n-input-number),
+.range-field :deep(.n-input) {
+  flex: 1;
+}
+
+.selection-status {
+  margin: -4px 0 6px 0;
+  font-size: 12px;
+  color: #b45309;
+}
+
+.selection-help {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 12px 0;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #f8fbff;
+  font-size: 12px;
+  color: #475569;
+}
+
+.selection-help.compact {
+  margin-bottom: 10px;
+  padding: 10px;
+}
+
+.overflow-config-panel {
+  display: grid;
+  gap: 12px;
+  margin: 4px 0 0;
+  padding: 14px;
+  border: 1px solid #dbe3f0;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+}
+
+.overflow-config-header {
+  display: grid;
+  gap: 4px;
+}
+
+.overflow-config-subtitle {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.overflow-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.overflow-grid-top {
+  margin-bottom: 2px;
+}
+
+.overflow-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.overflow-field-action {
+  align-content: end;
+}
+
+.overflow-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.overflow-summary {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid #dbe3f0;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 12px;
+  color: #475569;
+}
+
+.selection-banner {
+  padding: 12px 14px;
+  border: 1px solid #fde68a;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fffdf5 0%, #fffbeb 100%);
+  color: #92400e;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .mapping-help {
   margin: -4px 0 12px;
   font-size: 12px;
@@ -1028,6 +1514,10 @@ watch(
   }
 
   .mapping-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .overflow-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -304,10 +304,47 @@ async def update_template(
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(t, k, v)
     await db.commit()
-    await db.refresh(t, attribute_names=["folder"])
-    count_stmt = select(sa_func.count()).where(ReportFormMapping.template_id == t.id)
+    row = (
+        await db.execute(
+            select(
+                ReportFormTemplate.id,
+                ReportFormTemplate.name,
+                ReportFormTemplate.description,
+                ReportFormTemplate.file_name,
+                ReportFormTemplate.category,
+                ReportFormTemplate.folder_id,
+                ReportFormTemplate.is_active,
+                ReportFormTemplate.created_at,
+                ReportFormTemplate.updated_at,
+                ReportFormTemplateFolder.name.label("folder_name"),
+            )
+            .outerjoin(
+                ReportFormTemplateFolder,
+                ReportFormTemplate.folder_id == ReportFormTemplateFolder.id,
+            )
+            .where(ReportFormTemplate.id == template_id)
+        )
+    ).mappings().first()
+    if not row:
+        raise HTTPException(404)
+    count_stmt = select(sa_func.count()).where(ReportFormMapping.template_id == template_id)
     count = (await db.execute(count_stmt)).scalar() or 0
-    return _serialize_template(t, count)
+    folder_name = row["folder_name"]
+    folder_path = f"{folder_name} > {row['file_name']}" if folder_name else row["file_name"]
+    return FormTemplateRead(
+        id=row["id"],
+        name=row["name"],
+        description=row["description"],
+        file_name=row["file_name"],
+        category=row["category"],
+        folder_id=row["folder_id"],
+        folder_name=folder_name,
+        folder_path=folder_path,
+        is_active=row["is_active"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+        mapping_count=count,
+    )
 
 
 @router.delete("/{template_id}")
