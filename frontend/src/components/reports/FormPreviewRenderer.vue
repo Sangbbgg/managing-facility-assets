@@ -1,18 +1,13 @@
 <template>
-  <n-card class="preview-card" :bordered="false">
-    <template #header>
-      <div class="preview-header">
-        <div>
-          <div class="preview-title">양식 보고서 미리보기</div>
-          <div v-if="workbookName" class="preview-subtitle">
-            {{ workbookName }} 기준으로 실제 데이터가 채워진 결과를 표시합니다.
-          </div>
-          <div v-else class="preview-subtitle">
-            양식과 자산을 선택한 뒤 `미리보기`를 누르면 작성된 워크북이 여기 표시됩니다.
-          </div>
-        </div>
+  <div class="preview-panel">
+    <div class="preview-header">
+      <div v-if="workbookName" class="preview-subtitle">
+        {{ workbookName }} 기준으로 실제 데이터가 채워진 결과를 표시합니다.
       </div>
-    </template>
+      <div v-else class="preview-subtitle">
+        양식과 자산을 선택한 뒤 `미리보기`를 누르면 작성된 워크북이 여기 표시됩니다.
+      </div>
+    </div>
 
     <n-spin :show="store.loading">
       <div v-if="hasWorkbook" class="preview-body">
@@ -21,28 +16,36 @@
           <span v-if="activeSheetLabel"> / 현재 {{ activeSheetLabel }}</span>
         </div>
 
-        <div ref="spreadsheetHost" class="sheet-canvas" />
+        <div ref="spreadsheetViewport" class="sheet-canvas">
+          <div ref="spreadsheetHost" class="sheet-host" />
+        </div>
       </div>
 
       <n-empty
         v-else
-        description="양식과 자산을 선택하고 미리보기를 실행해 주세요."
+        :description="emptyDescription"
         style="padding: 80px 0"
       />
     </n-spin>
-  </n-card>
+  </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as XLSX from 'xlsx'
 import jspreadsheet from 'jspreadsheet-ce'
 import 'jspreadsheet-ce/dist/jspreadsheet.css'
 import 'jsuites/dist/jsuites.css'
 import { useFormTemplateStore } from '@/stores/formTemplateStore'
 
+let resizeTimer = null
+let viewportObserver = null
+let isRendering = false
+let lastViewportSize = { width: 0, height: 0 }
+
 const store = useFormTemplateStore()
 
+const spreadsheetViewport = ref(null)
 const spreadsheetHost = ref(null)
 const workbookInstance = ref(null)
 const workbookSummary = ref({ sheetNames: [], activeSheet: null })
@@ -52,6 +55,30 @@ const workbookName = computed(() => store.previewWorkbookName)
 const hasWorkbook = computed(() => !!workbookBinary.value)
 const sheetNames = computed(() => workbookSummary.value.sheetNames || [])
 const activeSheetLabel = computed(() => workbookSummary.value.activeSheet || '')
+const emptyDescription = computed(() => (
+  store.loading
+    ? '미리보기를 불러오는 중입니다.'
+    : '양식과 자산을 선택하고 미리보기를 실행해 주세요.'
+))
+
+onMounted(() => {
+  window.addEventListener('resize', handleWindowResize)
+})
+
+watch(
+  spreadsheetViewport,
+  (element) => {
+    disconnectViewportObserver()
+    if (!element || typeof ResizeObserver === 'undefined') {
+      return
+    }
+    viewportObserver = new ResizeObserver(() => {
+      queueWorkbookRender()
+    })
+    viewportObserver.observe(element)
+  },
+  { flush: 'post' },
+)
 
 watch(
   workbookBinary,
@@ -59,6 +86,7 @@ watch(
     if (!binary) {
       destroySpreadsheet()
       workbookSummary.value = { sheetNames: [], activeSheet: null }
+      lastViewportSize = { width: 0, height: 0 }
       return
     }
     await renderWorkbook(binary)
@@ -67,45 +95,63 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleWindowResize)
+  if (resizeTimer) {
+    window.clearTimeout(resizeTimer)
+  }
+  disconnectViewportObserver()
   destroySpreadsheet()
 })
 
 async function renderWorkbook(binary) {
-  destroySpreadsheet()
-  const workbook = XLSX.read(binary, {
-    type: 'array',
-    cellStyles: true,
-    cellFormula: true,
-    cellNF: true,
-    cellText: true,
-  })
-
-  const worksheets = workbook.SheetNames.map((sheetName) =>
-    buildWorksheet(workbook.Sheets[sheetName], sheetName),
-  )
-
-  workbookSummary.value = {
-    sheetNames: workbook.SheetNames,
-    activeSheet: workbook.SheetNames[0] || null,
+  if (isRendering) {
+    return
   }
+  isRendering = true
+  try {
+    destroySpreadsheet()
+    const workbook = XLSX.read(binary, {
+      type: 'array',
+      cellStyles: true,
+      cellFormula: true,
+      cellNF: true,
+      cellText: true,
+    })
 
-  await nextTick()
-  workbookInstance.value = jspreadsheet(spreadsheetHost.value, {
-    worksheets,
-    tabs: true,
-    toolbar: false,
-    contextMenu: false,
-    fullscreen: false,
-    onopenworksheet: (worksheet) => {
-      workbookSummary.value = {
-        ...workbookSummary.value,
-        activeSheet: worksheet?.options?.worksheetName || null,
-      }
-    },
-  })
+    const viewportSize = resolveViewportSize()
+    const viewportHeight = resolveViewportHeight(viewportSize.height)
+    const worksheets = workbook.SheetNames.map((sheetName) =>
+      buildWorksheet(workbook.Sheets[sheetName], sheetName, viewportHeight),
+    )
+
+    workbookSummary.value = {
+      sheetNames: workbook.SheetNames,
+      activeSheet: workbook.SheetNames[0] || null,
+    }
+
+    await nextTick()
+    workbookInstance.value = jspreadsheet(spreadsheetHost.value, {
+      worksheets,
+      tabs: true,
+      toolbar: false,
+      contextMenu: false,
+      fullscreen: false,
+      onopenworksheet: (worksheet) => {
+        workbookSummary.value = {
+          ...workbookSummary.value,
+          activeSheet: worksheet?.options?.worksheetName || null,
+        }
+        resetPreviewScroll()
+      },
+    })
+    resetPreviewScroll()
+    lastViewportSize = viewportSize
+  } finally {
+    isRendering = false
+  }
 }
 
-function buildWorksheet(sheet, sheetName) {
+function buildWorksheet(sheet, sheetName, viewportHeight) {
   const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:A1')
   const rowCount = Math.max(range.e.r + 1, 1)
   const colCount = Math.max(range.e.c + 1, 1)
@@ -132,8 +178,7 @@ function buildWorksheet(sheet, sheetName) {
     data,
     editable: false,
     tableOverflow: true,
-    tableWidth: '100%',
-    tableHeight: '640px',
+    tableHeight: `${viewportHeight}px`,
     wordWrap: true,
     rowDrag: false,
     rowResize: false,
@@ -320,6 +365,17 @@ function resolveRowHeight(source) {
   return 24
 }
 
+function resolveViewportSize() {
+  return {
+    width: spreadsheetViewport.value?.clientWidth || 0,
+    height: spreadsheetViewport.value?.clientHeight || 520,
+  }
+}
+
+function resolveViewportHeight(height) {
+  return Math.max(height - 64, 260)
+}
+
 function destroySpreadsheet() {
   if (workbookInstance.value?.destroy) {
     workbookInstance.value.destroy()
@@ -329,28 +385,68 @@ function destroySpreadsheet() {
     spreadsheetHost.value.innerHTML = ''
   }
 }
+
+function disconnectViewportObserver() {
+  if (viewportObserver) {
+    viewportObserver.disconnect()
+    viewportObserver = null
+  }
+}
+
+function resetPreviewScroll() {
+  if (!spreadsheetHost.value) {
+    return
+  }
+  for (const element of spreadsheetHost.value.querySelectorAll('.jss_content')) {
+    element.scrollLeft = 0
+    element.scrollTop = 0
+  }
+}
+
+function handleWindowResize() {
+  queueWorkbookRender()
+}
+
+function queueWorkbookRender() {
+  if (!workbookBinary.value) {
+    return
+  }
+  const nextViewportSize = resolveViewportSize()
+  if (nextViewportSize.width <= 0 || nextViewportSize.height <= 0) {
+    return
+  }
+  if (
+    Math.abs(nextViewportSize.width - lastViewportSize.width) < 2 &&
+    Math.abs(nextViewportSize.height - lastViewportSize.height) < 2
+  ) {
+    return
+  }
+  if (resizeTimer) {
+    window.clearTimeout(resizeTimer)
+  }
+  resizeTimer = window.setTimeout(() => {
+    resizeTimer = null
+    renderWorkbook(workbookBinary.value)
+  }, 120)
+}
 </script>
 
 <style scoped>
-.preview-card {
-  min-height: 320px;
+.preview-panel {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .preview-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 16px;
-}
-
-.preview-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #0f172a;
+  margin-bottom: 12px;
 }
 
 .preview-subtitle {
-  margin-top: 4px;
   font-size: 13px;
   color: #64748b;
 }
@@ -359,6 +455,8 @@ function destroySpreadsheet() {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
+  flex: 1;
 }
 
 .sheet-meta {
@@ -366,12 +464,38 @@ function destroySpreadsheet() {
   color: #475569;
 }
 
-.sheet-canvas :deep(.jexcel) {
-  width: 100% !important;
+.sheet-canvas {
+  min-height: 0;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid #dbe3f0;
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px;
 }
 
-.sheet-canvas :deep(.jexcel > table td),
-.sheet-canvas :deep(.jexcel > table th) {
+.sheet-host {
+  height: 100%;
+  min-height: 0;
+  width: max-content;
+  min-width: 100%;
+}
+
+.sheet-host :deep(.jtabs) {
+  width: max-content;
+  min-width: 100%;
+}
+
+.sheet-host :deep(.jss_content) {
+  width: max-content !important;
+  min-width: 100% !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
+.sheet-host :deep(.jss_worksheet td),
+.sheet-host :deep(.jss_worksheet th) {
   font-family: 'Malgun Gothic', sans-serif;
 }
 </style>

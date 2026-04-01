@@ -15,7 +15,10 @@ Use this skill as the repository-specific source of truth for Codex work in this
 4. Read `references/current-system-flow.md` when the task touches DB structure, backend routes/services, frontend pages/stores, or end-to-end data flow.
 5. Read `references/v2-frontend-list-standard.md` only when the task touches frontend list or table behavior.
 6. Read `references/v2-powershell-utf8-standard.md` when the task involves reading or verifying Korean text through PowerShell.
-7. Treat the live repository as canonical when older notes or legacy bundles conflict with the current code.
+7. Read `references/v2-form-template-equipment-type-standard.md` when the task touches `/reports/form-templates` or `/reports/form-report`.
+8. Read `references/v2-async-feedback-standard.md` when the task touches frontend async interactions or long-running user actions.
+9. Read `references/v2-docker-deploy-verification-standard.md` when the task includes implementing and verifying runtime changes.
+10. Treat the live repository as canonical when older notes or legacy bundles conflict with the current code.
 
 ## Immediate Korean Path Rule
 
@@ -59,6 +62,7 @@ Treat mojibake Korean output as a terminal decoding problem first. This rule als
 - Shared state lives under `frontend/src/stores`
 - Asset detail tabs live under `frontend/src/pages/assets/tabs`
 - Shared UI building blocks live under `frontend/src/components`
+- For noticeable async UI actions, read `references/v2-async-feedback-standard.md`.
 
 ### Codex Standards
 
@@ -190,11 +194,19 @@ Treat mojibake Korean output as a terminal decoding problem first. This rule als
 - Mapping modal preview should stay inside the modal and use internal scrolling for large tables.
 - Mapping currently supports repeat direction `down` and `right`, aggregate modes for repeatable sources, and `output_template` placeholders `{value}`, `{secondary}`, `{count}`.
 - Horizontal repeat placement must respect merged cells and skip merged-child targets.
+- Read `references/v2-form-template-equipment-type-standard.md` before changing template assignment behavior.
 
 ### When touching `/reports/form-report`
 
 - Prefer workbook-style preview of the filled XLSX when users need fidelity comparable to the template workbook view.
 - Keep report preview and downloaded XLSX driven by the same generation output so preview matches export.
+- Read `references/v2-form-template-equipment-type-standard.md` before changing template-selection behavior.
+- Read `references/v2-async-feedback-standard.md` before changing preview, generate, or download interactions.
+
+### When verifying changes
+
+- Read `references/v2-docker-deploy-verification-standard.md`.
+- After meaningful backend or frontend changes, rebuild and restart Docker services and verify the running deployment when feasible.
 
 ## Versioning Rule
 
@@ -209,3 +221,6 @@ Treat mojibake Korean output as a terminal decoding problem first. This rule als
 - Current DB/backend/frontend flow: `references/current-system-flow.md`
 - v2 frontend list standard: `references/v2-frontend-list-standard.md`
 - v2 PowerShell UTF-8 standard: `references/v2-powershell-utf8-standard.md`
+- v2 form template equipment type standard: `references/v2-form-template-equipment-type-standard.md`
+- v2 async feedback standard: `references/v2-async-feedback-standard.md`
+- v2 Docker deploy verification standard: `references/v2-docker-deploy-verification-standard.md`

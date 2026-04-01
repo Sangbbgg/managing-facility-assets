@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 
@@ -10,6 +10,8 @@ class FormTemplateCreate(BaseModel):
     description: Optional[str] = None
     category: str = "general"
     folder_id: Optional[int] = None
+    group_ids: list[int] = Field(default_factory=list)
+    equipment_type_ids: list[int] = Field(default_factory=list)
 
 
 class FormTemplateUpdate(BaseModel):
@@ -17,6 +19,8 @@ class FormTemplateUpdate(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     folder_id: Optional[int] = None
+    group_ids: Optional[list[int]] = None
+    equipment_type_ids: Optional[list[int]] = None
     is_active: Optional[bool] = None
 
 
@@ -37,6 +41,26 @@ class FormTemplateFolderRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class FormTemplateEquipmentTypeRead(BaseModel):
+    id: int
+    name: str
+    code: str
+    description: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class FormTemplateGroupRead(BaseModel):
+    id: int
+    name: str
+    full_path: str
+    depth: int
+    code: Optional[str] = None
+    display_code: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
 class FormTemplateRead(BaseModel):
     id: int
     name: str
@@ -46,6 +70,8 @@ class FormTemplateRead(BaseModel):
     folder_id: Optional[int] = None
     folder_name: Optional[str] = None
     folder_path: str
+    groups: list[FormTemplateGroupRead] = Field(default_factory=list)
+    equipment_types: list[FormTemplateEquipmentTypeRead] = Field(default_factory=list)
     is_active: bool
     created_at: datetime
     updated_at: datetime

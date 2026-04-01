@@ -68,6 +68,22 @@
             placeholder="미분류"
           />
         </n-form-item>
+        <n-form-item label="적용 그룹">
+          <div class="group-button-row">
+            <n-button
+              v-for="group in rootGroupOptions"
+              :key="group.value"
+              :type="templateForm.group_ids.includes(group.value) ? 'primary' : 'default'"
+              :ghost="!templateForm.group_ids.includes(group.value)"
+              @click="toggleTemplateGroup(group.value)"
+            >
+              {{ group.label }}
+            </n-button>
+          </div>
+        </n-form-item>
+        <div class="template-form-help">
+          발전제어, 신재생에너지 계열만 버튼으로 선택합니다. 선택한 상위 그룹의 하위 자산에도 같은 양식을 사용할 수 있습니다.
+        </div>
         <n-form-item label="설명">
           <n-input v-model:value="templateForm.description" type="textarea" :rows="3" />
         </n-form-item>
@@ -421,9 +437,11 @@ import FormTemplateList from '@/components/reports/FormTemplateList.vue'
 import FormTemplateWorkbookPreview from '@/components/reports/FormTemplateWorkbookPreview.vue'
 import { useFormTemplateStore } from '@/stores/formTemplateStore'
 import { useAssetStore } from '@/stores/assetStore'
+import { useGroupStore } from '@/stores/groupStore'
 
 const store = useFormTemplateStore()
 const assetStore = useAssetStore()
+const groupStore = useGroupStore()
 const message = useMessage()
 
 const showTemplateModal = ref(false)
@@ -524,6 +542,24 @@ const folderOptions = computed(() =>
     label: folder.name,
     value: folder.id,
   })),
+)
+
+const groupOptions = computed(() =>
+  groupStore.list
+    .filter((group) => group.depth > 0)
+    .map((group) => ({
+      label: group.full_path,
+      value: group.id,
+    })),
+)
+
+const rootGroupOptions = computed(() =>
+  groupStore.list
+    .filter((group) => group.depth === 1)
+    .map((group) => ({
+      label: group.name,
+      value: group.id,
+    })),
 )
 
 const assetOptions = computed(() =>
@@ -747,8 +783,25 @@ function emptyTemplateForm() {
     category: 'general',
     description: '',
     folder_id: null,
+    group_ids: [],
     is_active: true,
   }
+}
+
+function resolveRootGroupId(groupId) {
+  let current = groupStore.list.find((group) => group.id === groupId) || null
+  while (current && current.depth > 1) {
+    current = groupStore.list.find((group) => group.id === current.parent_id) || null
+  }
+  return current?.id || null
+}
+
+function toggleTemplateGroup(groupId) {
+  if (templateForm.value.group_ids.includes(groupId)) {
+    templateForm.value.group_ids = templateForm.value.group_ids.filter((id) => id !== groupId)
+    return
+  }
+  templateForm.value.group_ids = [...templateForm.value.group_ids, groupId]
 }
 
 function emptyMappingForm() {
@@ -786,11 +839,17 @@ function openCreateModal() {
 
 function openEditModal(template) {
   editingTemplate.value = template
+  const rootGroupIds = [...new Set(
+    (template.groups || [])
+      .map((group) => resolveRootGroupId(group.id))
+      .filter(Boolean),
+  )]
   templateForm.value = {
     name: template.name,
     category: template.category,
     description: template.description || '',
     folder_id: template.folder_id || null,
+    group_ids: rootGroupIds,
     is_active: template.is_active,
   }
   uploadFile.value = null
@@ -1144,6 +1203,7 @@ async function submitTemplate() {
         category: templateForm.value.category,
         description: templateForm.value.description,
         folder_id: templateForm.value.folder_id,
+        group_ids: templateForm.value.group_ids,
         is_active: templateForm.value.is_active,
       })
       message.success('템플릿 정보를 수정했습니다.')
@@ -1156,6 +1216,9 @@ async function submitTemplate() {
       }
       if (templateForm.value.folder_id != null) {
         formData.append('folder_id', String(templateForm.value.folder_id))
+      }
+      for (const groupId of templateForm.value.group_ids) {
+        formData.append('group_ids', String(groupId))
       }
       formData.append('file', uploadFile.value)
       const created = await store.create(formData)
@@ -1171,7 +1234,12 @@ async function submitTemplate() {
 }
 
 onMounted(async () => {
-  await Promise.all([store.fetchFolders(), store.fetchList(), assetStore.fetchList()])
+  await Promise.all([
+    store.fetchFolders(),
+    store.fetchList(),
+    assetStore.fetchList(),
+    groupStore.fetchList(),
+  ])
   if (assetStore.list.length > 0) {
     previewAssetId.value = assetStore.list[0].id
   }
@@ -1224,6 +1292,19 @@ watch(
 .page-description {
   margin: 8px 0 0;
   color: #64748b;
+}
+
+.template-form-help {
+  margin: -8px 0 12px;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.group-button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .page-grid {

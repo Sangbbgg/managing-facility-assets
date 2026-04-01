@@ -17,6 +17,15 @@ export const useAssetStore = defineStore('asset', () => {
     } finally { loading.value = false }
   }
 
+  async function fetchDetailList() {
+    loading.value = true
+    try {
+      const data = await assetsApi.detailList()
+      list.value = data
+      total.value = data.length
+    } finally { loading.value = false }
+  }
+
   async function fetchOne(id) { current.value = await assetsApi.get(id) }
 
   async function create(body) {
@@ -47,5 +56,5 @@ export const useAssetStore = defineStore('asset', () => {
     return await assetsApi.bulkRegister(formData)
   }
 
-  return { list, current, loading, total, fetchList, fetchOne, create, update, remove, previewCode, bulkCreate }
+  return { list, current, loading, total, fetchList, fetchDetailList, fetchOne, create, update, remove, previewCode, bulkCreate }
 })

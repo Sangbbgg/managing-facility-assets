@@ -58,6 +58,9 @@
                 <span>매핑 {{ template.mapping_count || 0 }}개</span>
                 <span>{{ template.is_active ? '활성' : '비활성' }}</span>
               </div>
+              <div class="item-equipment-types">
+                {{ formatGroups(template.groups) }}
+              </div>
             </div>
 
             <div class="item-actions">
@@ -138,6 +141,13 @@ const categoryLabel = {
   general: '일반',
   inspection: '점검',
   security: '보안',
+}
+
+function formatGroups(groups = []) {
+  if (!groups.length) {
+    return '적용 그룹: 전체'
+  }
+  return `적용 그룹: ${groups.map((group) => group.full_path || group.name).join(', ')}`
 }
 
 const sections = computed(() => {
@@ -329,6 +339,11 @@ function handleDeleteTemplate(template) {
   gap: 10px;
   font-size: 12px;
   color: #64748b;
+}
+
+.item-equipment-types {
+  font-size: 12px;
+  color: #475569;
 }
 
 .item-actions {

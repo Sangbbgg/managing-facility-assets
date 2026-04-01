@@ -31,6 +31,54 @@ class ReportFormTemplate(Base):
 
     folder = relationship("ReportFormTemplateFolder", back_populates="templates")
     mappings = relationship("ReportFormMapping", back_populates="template", cascade="all, delete-orphan")
+    equipment_type_links = relationship(
+        "ReportFormTemplateEquipmentType",
+        back_populates="template",
+        cascade="all, delete-orphan",
+    )
+    group_links = relationship(
+        "ReportFormTemplateGroup",
+        back_populates="template",
+        cascade="all, delete-orphan",
+    )
+
+
+class ReportFormTemplateEquipmentType(Base):
+    __tablename__ = "report_form_template_equipment_types"
+
+    template_id = Column(
+        Integer,
+        ForeignKey("report_form_templates.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    equipment_type_id = Column(
+        Integer,
+        ForeignKey("equipment_types.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    template = relationship("ReportFormTemplate", back_populates="equipment_type_links")
+    equipment_type = relationship("EquipmentType")
+
+
+class ReportFormTemplateGroup(Base):
+    __tablename__ = "report_form_template_groups"
+
+    template_id = Column(
+        Integer,
+        ForeignKey("report_form_templates.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    group_id = Column(
+        Integer,
+        ForeignKey("group_nodes.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    template = relationship("ReportFormTemplate", back_populates="group_links")
+    group = relationship("GroupNode")
 
 
 class ReportFormMapping(Base):

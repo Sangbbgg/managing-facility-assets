@@ -19,6 +19,14 @@ Purpose:
 - Keep tree, catalog, and person master data separate from asset detail.
 - Provide source data for asset registration, filtering, grouping, and default manager resolution.
 
+Current seeded default hierarchy:
+- `group_nodes` root is `신인천빛드림본부`.
+- Main seeded report/registration branches are `발전제어` and `신재생에너지`.
+- `발전제어` currently splits into `기반` and `비기반`.
+- `기반` currently continues through staged branches such as `1단계`, `2단계`, `1CC`, `2CC`, and leaf code nodes like `ST1`, `GT1`, `COM`.
+- `신재생에너지` currently uses `연료전지` as the main seeded branch.
+- `location_nodes` mirrors the operational site tree separately from `group_nodes`, so location filtering should follow the selected group branch instead of assuming identical ids or depth.
+
 ### Asset Master Table
 
 - `assets`
@@ -295,11 +303,14 @@ Role:
 
 Current form-template/report behavior:
 - `/api/form-templates/field-catalog` is driven by `form_report_builder.FIELD_CATALOG`.
+- Form templates can be assigned to zero, one, or many equipment types.
+- Templates with no assigned equipment types behave as global templates for backward compatibility.
 - Form-template mapping supports repeat directions `down` and `right`.
 - Repeat placement skips merged-child cells so repeated values land in visible worksheet cells.
 - Non-repeat mappings on repeatable sources can use aggregate modes plus `output_template`.
 - Mapping modal sample preview is backed by `/api/form-templates/data-preview`.
 - `hw_optical` is part of the form-template data-source catalog.
+- Form report preview and XLSX generation reject templates that do not match the selected asset equipment type.
 
 ## 3. Frontend Flow
 
@@ -438,6 +449,8 @@ Role:
 - Manage report templates and form mappings.
 - Trigger report generation and preview.
 - Use workbook-style preview for both template mapping context and filled form-report output where fidelity matters.
+- Keep template assignment and selection behavior aligned with equipment-type compatibility rules.
+- For report preview and generation actions, show visible in-progress feedback and prevent duplicate triggering while the request is running.
 
 ## 4. End-to-End Reference Flows
 
