@@ -140,6 +140,10 @@ _SEED_ROOT_TABLES = (
     "person_group_roles",
 )
 
+_RESET_ONLY_TABLES = (
+    "asset_code_sequences",
+)
+
 
 async def _table_has_rows(session: AsyncSession, table_name: str) -> bool:
     result = await session.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
@@ -156,7 +160,8 @@ async def _sync_sequence(session: AsyncSession, table_name: str) -> None:
 
 
 async def reset_seeded_db(session: AsyncSession) -> None:
-    quoted_tables = ", ".join(f'"{table_name}"' for table_name in _SEED_ROOT_TABLES)
+    reset_tables = _SEED_ROOT_TABLES + _RESET_ONLY_TABLES
+    quoted_tables = ", ".join(f'"{table_name}"' for table_name in reset_tables)
     await session.execute(text(f"TRUNCATE TABLE {quoted_tables} RESTART IDENTITY CASCADE"))
     await session.commit()
 

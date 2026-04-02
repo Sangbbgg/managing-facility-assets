@@ -22,14 +22,20 @@ async def get_next_asset_code_parts(
     )
     seq_row = await db.scalar(stmt)
     if seq_row is None:
-        seq_row = AssetCodeSequence(group_code=sequence_group_code, type_code=type_code, last_seq=0)
-        db.add(seq_row)
-        await db.flush()
+        if increment:
+            seq_row = AssetCodeSequence(group_code=sequence_group_code, type_code=type_code, last_seq=0)
+            db.add(seq_row)
+            await db.flush()
+            last_seq = seq_row.last_seq
+        else:
+            last_seq = 0
+    else:
+        last_seq = seq_row.last_seq
 
-    next_seq = seq_row.last_seq + 1
+    next_seq = last_seq + 1
     asset_code = f"{settings.ASSET_PREFIX}-{display_group_code}-{type_code}-{next_seq:04d}"
 
-    if increment:
+    if increment and seq_row is not None:
         seq_row.last_seq = next_seq
 
     return asset_code, next_seq
