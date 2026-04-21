@@ -1,10 +1,24 @@
 """
-DB 관리 API — 테이블 목록·컬럼 정보·데이터 조회
+DB 관리 API — 테이블 목록·컬럼 정보·데이터 조회·스냅샷 관리
 개발/운영 편의 용도. 외부 노출 주의.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import inspect as sa_inspect, text
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import engine
+from app.core.database import get_db
+from app.schemas.db_snapshot import (
+    DatabaseSnapshotCreate,
+    DatabaseSnapshotRead,
+    DatabaseSnapshotRestoreResult,
+)
+from app.services.db_snapshot import (
+    create_snapshot,
+    get_snapshot_or_404,
+    list_snapshots,
+    restore_snapshot,
+    rollback_last_restore,
+)
 
 router = APIRouter()
 
@@ -64,3 +78,32 @@ async def get_table_data(table_name: str, page: int = 1, size: int = 50):
         ]
 
     return {"columns": cols, "rows": rows, "total": total, "page": page, "size": size}
+
+
+@router.get("/snapshots", response_model=list[DatabaseSnapshotRead])
+async def get_snapshots(db: AsyncSession = Depends(get_db)):
+    return await list_snapshots(db)
+
+
+@router.post("/snapshots", response_model=DatabaseSnapshotRead, status_code=201)
+async def save_snapshot(body: DatabaseSnapshotCreate, db: AsyncSession = Depends(get_db)):
+    return await create_snapshot(db, body.name, description=body.description)
+
+
+@router.post("/snapshots/{snapshot_id}/restore", response_model=DatabaseSnapshotRestoreResult)
+async def load_snapshot(snapshot_id: int, db: AsyncSession = Depends(get_db)):
+    snapshot = await get_snapshot_or_404(db, snapshot_id)
+    rollback_snapshot = await restore_snapshot(db, snapshot, create_rollback_snapshot=True)
+    return DatabaseSnapshotRestoreResult(
+        message=f"'{snapshot.name}' 스냅샷을 로드했습니다",
+        rollback_snapshot=rollback_snapshot,
+    )
+
+
+@router.post("/snapshots/rollback", response_model=DatabaseSnapshotRestoreResult)
+async def cancel_snapshot_restore(db: AsyncSession = Depends(get_db)):
+    rollback_snapshot = await rollback_last_restore(db)
+    return DatabaseSnapshotRestoreResult(
+        message="마지막 스냅샷 로드를 취소하고 이전 DB 상태로 복원했습니다",
+        rollback_snapshot=None,
+    )

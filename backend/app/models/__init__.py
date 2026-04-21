@@ -25,3 +25,4 @@ from app.models.form_template import (
     ReportFormMapping,
 )  # v3
 from app.models.report import ReportTemplate
+from app.models.db_snapshot import DatabaseSnapshot

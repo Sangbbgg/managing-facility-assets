@@ -39,6 +39,7 @@ import {
   BusinessOutline,
   HardwareChipOutline,
   GridOutline,
+  SaveOutline,
 } from '@vicons/ionicons5'
 
 const router = useRouter()
@@ -86,6 +87,7 @@ const menuOptions = [
       { label: '장비 종류', key: '/settings/equipment-types', icon: icon(HardwareChipOutline) },
       { label: '담당자', key: '/settings/persons', icon: icon(PeopleOutline) },
       { label: '부서', key: '/settings/departments', icon: icon(BusinessOutline) },
+      { label: 'DB 스냅샷', key: '/settings/db-snapshots', icon: icon(SaveOutline) },
       { label: 'PostgreSQL DB', key: '/settings/db', icon: icon(GridOutline) },
     ],
   },

@@ -1,6 +1,8 @@
 import csv
 import io
 import json
+from pathlib import PurePosixPath
+import re
 import zipfile
 from datetime import date, datetime
 from typing import Optional
@@ -36,6 +38,29 @@ HW_SW_MODELS = [
     AssetSwAccount,
     AssetNetworkConnection,
 ]
+
+LEGACY_FILE_MAP = {
+    "csproduct.txt": ("system", "csproduct"),
+    "os.txt": ("system", "os"),
+    "systeminfo.txt": ("system", "computerinfo"),
+    "systeminfo_tool.txt": ("system", "computerinfo"),
+    "cpu.txt": ("cpu", None),
+    "memorychip.txt": ("memory", None),
+    "memory.txt": ("memory", None),
+    "diskdrive.txt": ("disk", None),
+    "videocontroller.txt": ("gpu", None),
+    "nic.txt": ("nic", None),
+    "ipconfig_all.txt": ("nic", None),
+    "hotfix.txt": ("hotfix", None),
+    "product.txt": ("product", None),
+    "process.txt": ("process", None),
+    "connections.txt": ("connections", None),
+    "netstat.txt": ("connections", None),
+}
+
+LEGACY_PARSER_ONLY_FILES = {
+    "systeminfo_tool.txt",
+}
 
 
 async def parse_powershell_json(data: dict, asset_id: int, db: AsyncSession) -> dict:
@@ -104,9 +129,9 @@ async def parse_powershell_json(data: dict, asset_id: int, db: AsyncSession) -> 
                 collected_at=collected_at,
                 name=item.get("name") or item.get("Name") or summary_data.get("cpu_model"),
                 manufacturer=item.get("manufacturer") or item.get("Manufacturer"),
-                cores=item.get("cores") or item.get("NumberOfCores"),
-                logical_cpus=item.get("logical_cpus") or item.get("NumberOfLogicalProcessors"),
-                max_clock_mhz=item.get("max_clock_mhz") or item.get("MaxClockSpeed"),
+                cores=_to_int(item.get("cores") or item.get("NumberOfCores")),
+                logical_cpus=_to_int(item.get("logical_cpus") or item.get("NumberOfLogicalProcessors")),
+                max_clock_mhz=_to_int(item.get("max_clock_mhz") or item.get("MaxClockSpeed")),
                 architecture=_arch_name(item.get("architecture") or item.get("Architecture")),
                 socket=item.get("socket") or item.get("SocketDesignation"),
                 raw_json=item,
@@ -133,7 +158,7 @@ async def parse_powershell_json(data: dict, asset_id: int, db: AsyncSession) -> 
                 collected_at=collected_at,
                 locator=item.get("locator") or item.get("DeviceLocator"),
                 capacity_bytes=_parse_capacity_bytes(item.get("capacity") or item.get("Capacity")),
-                speed_mhz=item.get("speed_mhz") or item.get("Speed"),
+                speed_mhz=_to_int(item.get("speed_mhz") or item.get("Speed")),
                 manufacturer=item.get("manufacturer") or item.get("Manufacturer"),
                 part_number=_clean(item.get("part_number") or item.get("PartNumber")),
                 serial_number=_clean(item.get("serial_number") or item.get("SerialNumber")),
@@ -150,11 +175,11 @@ async def parse_powershell_json(data: dict, asset_id: int, db: AsyncSession) -> 
                 asset_id=asset_id,
                 collected_at=collected_at,
                 model=item.get("model") or item.get("Model"),
-                size_bytes=item.get("size_bytes") or item.get("Size"),
+                size_bytes=_to_int(item.get("size_bytes") or item.get("Size")),
                 interface_type=item.get("interface_type") or item.get("InterfaceType"),
                 serial_number=_clean(item.get("serial_number") or item.get("SerialNumber")),
                 media_type=item.get("media_type") or item.get("MediaType"),
-                partitions=item.get("partitions") or item.get("Partitions"),
+                partitions=_to_int(item.get("partitions") or item.get("Partitions")),
                 raw_json=item,
             )
         )
@@ -275,9 +300,9 @@ async def parse_powershell_json(data: dict, asset_id: int, db: AsyncSession) -> 
                 asset_id=asset_id,
                 collected_at=collected_at,
                 process_name=item.get("name") or item.get("process_name") or item.get("ProcessName"),
-                pid=item.get("pid") or item.get("Id"),
+                pid=_to_int(item.get("pid") or item.get("Id")),
                 session_name=str(item.get("session_name") or item.get("SessionId") or ""),
-                memory_kb=item.get("memory_kb") or item.get("WorkingSetKB") or item.get("WorkingSet64"),
+                memory_kb=_to_int(item.get("memory_kb") or item.get("WorkingSetKB") or item.get("WorkingSet64")),
                 raw_json=item,
             )
         )
@@ -315,41 +340,90 @@ async def parse_powershell_json(data: dict, asset_id: int, db: AsyncSession) -> 
 
 
 async def parse_legacy_zip(zip_bytes: bytes, asset_id: int, db: AsyncSession) -> dict:
-    file_map = {
-        "csproduct.txt": ("system", "csproduct"),
-        "os.txt": ("system", "os"),
-        "systeminfo.txt": ("system", "computerinfo"),
-        "cpu.txt": ("cpu", None),
-        "memorychip.txt": ("memory", None),
-        "diskdrive.txt": ("disk", None),
-        "videocontroller.txt": ("gpu", None),
-        "nic.txt": ("nic", None),
-        "hotfix.txt": ("hotfix", None),
-        "product.txt": ("product", None),
-        "process.txt": ("process", None),
-        "connections.txt": ("connections", None),
-        "netstat.txt": ("connections", None),
+    result_data, _, _ = _build_legacy_result_data(_read_legacy_zip_entries(zip_bytes))
+    return await parse_powershell_json(result_data, asset_id, db)
+
+
+async def parse_legacy_folder(entries: list[tuple[str, bytes]], asset_id: int, db: AsyncSession) -> dict:
+    _validate_legacy_folder_entries(entries)
+    result_data, _, _ = _build_legacy_result_data(entries)
+    return await parse_powershell_json(result_data, asset_id, db)
+
+
+def build_collect_preview(data: dict) -> dict:
+    normalized = _normalize_collect_payload(data)
+    summary_data = normalized["summary"]
+    network_data = normalized["network"]
+
+    counts: dict[str, int] = {}
+    cpu_items = _ensure_list(summary_data.get("cpu_items"))
+    memory_items = _ensure_list(summary_data.get("memory_slots"))
+    disk_items = _ensure_list(summary_data.get("disk_items"))
+    storage_devices = _ensure_list(summary_data.get("storage_devices"))
+    optical_items = _normalize_optical_items(summary_data.get("optical_drives") or summary_data.get("optical_devices"))
+    gpu_items = _dedupe_gpu_items(_ensure_list(summary_data.get("gpu_items")))
+    nic_items = _build_nic_rows(network_data)
+    connection_items = _ensure_list(network_data.get("connections"))
+    software_items = _ensure_list(normalized.get("software"))
+    hotfix_items = _ensure_list(normalized.get("hotfixes"))
+    process_items = _ensure_list(normalized.get("processes"))
+    account_items = _ensure_list(normalized.get("accounts"))
+
+    if summary_data:
+        counts["system"] = 1
+    if cpu_items or summary_data.get("cpu_model"):
+        counts["cpu"] = len(cpu_items) or 1
+    if memory_items:
+        counts["memory"] = len(memory_items)
+    if disk_items or storage_devices:
+        counts["disk"] = len(disk_items) + len(storage_devices)
+    if optical_items:
+        counts["optical"] = len(optical_items)
+    if gpu_items:
+        counts["gpu"] = len(gpu_items)
+    if nic_items:
+        counts["nic"] = len(nic_items)
+    if connection_items:
+        counts["connections"] = len(connection_items)
+    if software_items:
+        counts["product"] = len(software_items)
+    if hotfix_items:
+        counts["hotfix"] = len(hotfix_items)
+    if process_items:
+        counts["process"] = len(process_items)
+    if account_items:
+        counts["account"] = len(account_items)
+
+    return {
+        "status": "preview",
+        "counts": counts,
+        "meta": normalized.get("meta", {}),
     }
 
-    result_data: dict = {"_meta": {"collected_at": datetime.now(), "hostname": "legacy"}}
 
-    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-        for zpath in zf.namelist():
-            fname = zpath.split("/")[-1].lower()
-            if fname not in file_map:
-                continue
-            target_key, sub_key = file_map[fname]
-            try:
-                content = zf.read(zpath).decode("euc-kr", errors="replace")
-                rows = list(csv.DictReader(io.StringIO(content)))
-                if sub_key:
-                    result_data.setdefault("system", {})[sub_key] = rows[0] if rows else {}
-                else:
-                    result_data[target_key] = rows
-            except Exception:
-                continue
+def preview_legacy_zip(zip_bytes: bytes) -> dict:
+    result_data, parsed_files, ignored_files = _build_legacy_result_data(_read_legacy_zip_entries(zip_bytes))
+    preview = build_collect_preview(result_data)
+    preview.update({
+        "files": parsed_files,
+        "file_count": len(parsed_files),
+        "ignored_files": ignored_files,
+        "source_kind": "zip",
+    })
+    return preview
 
-    return await parse_powershell_json(result_data, asset_id, db)
+
+def preview_legacy_folder(entries: list[tuple[str, bytes]]) -> dict:
+    _validate_legacy_folder_entries(entries)
+    result_data, parsed_files, ignored_files = _build_legacy_result_data(entries)
+    preview = build_collect_preview(result_data)
+    preview.update({
+        "files": parsed_files,
+        "file_count": len(parsed_files),
+        "ignored_files": ignored_files,
+        "source_kind": "folder",
+    })
+    return preview
 
 
 async def _clear_existing_collect_rows(db: AsyncSession, asset_id: int) -> None:
@@ -613,18 +687,21 @@ def _normalize_collect_payload(data: dict) -> dict:
         items = _ensure_list(data.get("cpu"))
         normalized["summary"]["cpu_items"] = items
         if items and not normalized["summary"].get("cpu_model"):
-            normalized["summary"]["cpu_model"] = items[0].get("Name")
+            normalized["summary"]["cpu_model"] = (
+                items[0].get("Name")
+                or items[0].get("name")
+            )
 
     if "memory" in data:
         normalized["summary"]["memory_slots"] = [
             {
-                "locator": item.get("DeviceLocator"),
-                "capacity": item.get("Capacity"),
-                "speed_mhz": item.get("Speed"),
-                "manufacturer": item.get("Manufacturer"),
-                "part_number": item.get("PartNumber"),
-                "serial_number": item.get("SerialNumber"),
-                "form_factor": item.get("FormFactor"),
+                "locator": item.get("DeviceLocator") or item.get("BankLabel") or item.get("locator"),
+                "capacity": item.get("Capacity") or item.get("capacity"),
+                "speed_mhz": item.get("Speed") or item.get("ConfiguredClockSpeed") or item.get("speed_mhz"),
+                "manufacturer": item.get("Manufacturer") or item.get("manufacturer"),
+                "part_number": item.get("PartNumber") or item.get("part_number"),
+                "serial_number": item.get("SerialNumber") or item.get("serial_number") or item.get("Tag"),
+                "form_factor": item.get("FormFactor") or item.get("form_factor"),
                 **item,
             }
             for item in _ensure_list(data.get("memory"))
@@ -642,14 +719,14 @@ def _normalize_collect_payload(data: dict) -> dict:
     if "nic" in data:
         normalized["network"]["interfaces"] = [
             {
-                "name": item.get("InterfaceDescription"),
-                "connection_name": item.get("InterfaceAlias"),
-                "mac_address": item.get("MacAddress"),
-                "ipv4_address": _extract_ip(item.get("IPv4Address")),
-                "subnet_mask": item.get("SubnetMask"),
-                "default_gateway": item.get("DefaultGateway"),
-                "dns_servers": item.get("DNSServerSearchOrder") or item.get("DnsServers"),
-                "dhcp_enabled": item.get("DHCPEnabled"),
+                "name": item.get("InterfaceDescription") or item.get("Description") or item.get("adapter_name"),
+                "connection_name": item.get("InterfaceAlias") or item.get("connection_name") or item.get("Name"),
+                "mac_address": item.get("MacAddress") or item.get("PhysicalAddress") or item.get("mac_address"),
+                "ipv4_address": _extract_ip(item.get("IPv4Address") or item.get("ipv4_address")),
+                "subnet_mask": item.get("SubnetMask") or item.get("subnet_mask"),
+                "default_gateway": item.get("DefaultGateway") or item.get("default_gateway"),
+                "dns_servers": item.get("DNSServerSearchOrder") or item.get("DnsServers") or item.get("dns_servers"),
+                "dhcp_enabled": item.get("DHCPEnabled") if "DHCPEnabled" in item else item.get("dhcp_enabled"),
                 **item,
             }
             for item in _ensure_list(data.get("nic"))
@@ -683,10 +760,10 @@ def _normalize_collect_payload(data: dict) -> dict:
     if "process" in data:
         normalized["processes"] = [
             {
-                "name": item.get("ProcessName"),
-                "pid": item.get("Id"),
-                "session_name": item.get("SessionId"),
-                "memory_kb": item.get("WorkingSetKB") or item.get("WorkingSet64"),
+                "name": item.get("ProcessName") or item.get("Image Name") or item.get("name"),
+                "pid": item.get("Id") or item.get("PID") or item.get("pid"),
+                "session_name": item.get("SessionId") or item.get("Session Name") or item.get("session_name") or item.get("Session#"),
+                "memory_kb": item.get("WorkingSetKB") or item.get("WorkingSet64") or item.get("memory_kb") or _parse_memory_usage_to_kb(item.get("Mem Usage")),
                 **item,
             }
             for item in _ensure_list(data.get("process"))
@@ -707,6 +784,469 @@ def _normalize_collect_payload(data: dict) -> dict:
         normalized["network"]["connections"] = _normalize_connections(_ensure_list(data.get("connections")))
 
     return _sanitize_collect_value(normalized)
+
+
+def _read_legacy_zip_entries(zip_bytes: bytes) -> list[tuple[str, bytes]]:
+    entries: list[tuple[str, bytes]] = []
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+        for zpath in zf.namelist():
+            if zpath.endswith("/"):
+                continue
+            entries.append((zpath, zf.read(zpath)))
+    return entries
+
+
+def _build_legacy_result_data(entries: list[tuple[str, bytes]]) -> tuple[dict, list[dict], list[str]]:
+    result_data: dict = {"_meta": {"collected_at": datetime.now().isoformat(), "hostname": "legacy"}}
+    parsed_files: list[dict] = []
+    ignored_files: list[str] = []
+
+    for entry_name, content in entries:
+        normalized_path = _normalize_legacy_entry_name(entry_name)
+        file_name = PurePosixPath(normalized_path).name.lower()
+        if file_name not in LEGACY_FILE_MAP:
+            ignored_files.append(file_name)
+            continue
+
+        target_key, sub_key = LEGACY_FILE_MAP[file_name]
+        try:
+            rows, meta_updates = _parse_legacy_entry(file_name, content)
+        except Exception:
+            ignored_files.append(file_name)
+            continue
+        if not rows:
+            ignored_files.append(file_name)
+            continue
+
+        result_data["_meta"].update({key: value for key, value in meta_updates.items() if value})
+
+        if sub_key:
+            result_data.setdefault("system", {})[sub_key] = rows[0] if rows else {}
+        else:
+            result_data[target_key] = rows
+
+        parsed_files.append({
+            "name": file_name,
+            "rows": len(rows),
+            "target": target_key,
+        })
+
+    parsed_files.sort(key=lambda item: item["name"])
+    ignored_files.sort()
+    return result_data, parsed_files, ignored_files
+
+
+def _validate_legacy_folder_entries(entries: list[tuple[str, bytes]]) -> None:
+    if not entries:
+        raise ValueError("폴더 안에 업로드할 파일이 없습니다")
+
+    nested_files = [
+        _normalize_legacy_entry_name(entry_name)
+        for entry_name, _ in entries
+        if _legacy_path_depth(_normalize_legacy_entry_name(entry_name)) > 2
+    ]
+    if nested_files:
+        raise ValueError("하위 폴더가 포함된 폴더는 등록할 수 없습니다. 파일이 바로 들어있는 폴더를 선택해 주세요")
+
+    direct_files = [
+        entry_name
+        for entry_name, _ in entries
+        if _legacy_path_depth(_normalize_legacy_entry_name(entry_name)) == 2
+    ]
+    if not direct_files:
+        raise ValueError("선택한 폴더에 바로 등록할 파일이 없습니다")
+
+
+def _normalize_legacy_entry_name(entry_name: str) -> str:
+    return str(entry_name or "").replace("\\", "/").strip("/")
+
+
+def _legacy_path_depth(entry_name: str) -> int:
+    normalized = _normalize_legacy_entry_name(entry_name)
+    if not normalized:
+        return 0
+    return len([part for part in normalized.split("/") if part])
+
+
+def _parse_legacy_entry(file_name: str, content: bytes) -> tuple[list[dict], dict]:
+    text = _decode_legacy_text(content)
+    normalized_name = file_name.lower()
+
+    parser = LEGACY_TEXT_PARSERS.get(normalized_name)
+    if parser:
+        rows, meta_updates = parser(text)
+        if rows:
+            return rows, meta_updates
+        if normalized_name in LEGACY_PARSER_ONLY_FILES:
+            return [], {}
+
+    rows = _parse_csv_rows(text)
+    if rows:
+        return rows, {}
+
+    return [], {}
+
+
+def _decode_legacy_text(content: bytes) -> str:
+    encodings = ["utf-8-sig", "utf-16", "utf-16-le", "cp949", "euc-kr", "utf-8"]
+    for encoding in encodings:
+        try:
+            text = content.decode(encoding)
+            if text:
+                return text.replace("\x00", "").lstrip("\ufeff")
+        except UnicodeDecodeError:
+            continue
+    return content.decode("utf-8", errors="replace").replace("\x00", "").lstrip("\ufeff")
+
+
+def _parse_csv_rows(text: str) -> list[dict]:
+    cleaned_text = text.lstrip("\ufeff\r\n\t ")
+    if not cleaned_text.strip():
+        return []
+    sample = cleaned_text[:4096]
+    if not any(delimiter in sample for delimiter in [",", "\t", ";"]):
+        return []
+
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=",\t;")
+    except csv.Error:
+        dialect = csv.excel
+
+    reader = csv.DictReader(io.StringIO(cleaned_text), dialect=dialect)
+    rows = []
+    for row in reader:
+        cleaned = {
+            str(key).strip(): _clean_text(value)
+            for key, value in row.items()
+            if key is not None and str(key).strip()
+        }
+        if any(value not in (None, "") for value in cleaned.values()):
+            rows.append(cleaned)
+    return rows
+
+
+def _parse_process_text(text: str) -> tuple[list[dict], dict]:
+    rows: list[dict] = []
+    lines = [line.rstrip() for line in text.splitlines() if line.strip()]
+    header_seen = False
+    for line in lines:
+        normalized = line.strip()
+        if "Image Name" in normalized and "PID" in normalized and "Mem Usage" in normalized:
+            header_seen = True
+            continue
+        if not header_seen:
+            continue
+        if set(normalized) <= {"=", "-"}:
+            continue
+        match = re.match(
+            r"^(?P<name>.+?)\s+(?P<pid>\d+)\s+(?P<session_name>.+?)\s+(?P<session_num>\d+)\s+(?P<mem>[\d,\.]+\s*K)\s*$",
+            normalized,
+        )
+        if not match:
+            continue
+        rows.append({
+            "Image Name": match.group("name").strip(),
+            "PID": match.group("pid").strip(),
+            "Session Name": match.group("session_name").strip(),
+            "Session#": match.group("session_num").strip(),
+            "Mem Usage": match.group("mem").strip(),
+        })
+    return rows, {}
+
+
+def _parse_netstat_text(text: str) -> tuple[list[dict], dict]:
+    rows: list[dict] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("Active Connections") or line.startswith("Proto"):
+            continue
+        match = re.match(
+            r"^(?P<proto>TCP|UDP)\s+(?P<local>\S+)\s+(?P<remote>\S+)(?:\s+(?P<state>\S+))?\s*$",
+            line,
+            flags=re.IGNORECASE,
+        )
+        if not match:
+            continue
+        rows.append({
+            "Protocol": match.group("proto").upper(),
+            "LocalAddress": match.group("local"),
+            "RemoteAddress": match.group("remote"),
+            "State": match.group("state"),
+        })
+    return rows, {}
+
+
+def _parse_systeminfo_text(text: str) -> tuple[list[dict], dict]:
+    info: dict[str, str] = {}
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        label = _cleanup_systeminfo_label(key)
+        if not label:
+            continue
+        info[label] = value.strip()
+
+    if not info:
+        return [], {}
+
+    os_version = info.get("os_version")
+    build_number = None
+    if os_version:
+        match = re.search(r"build\s+(\d+)", os_version, flags=re.IGNORECASE)
+        if match:
+            build_number = match.group(1)
+
+    total_memory = info.get("total_physical_memory")
+    rows = [{
+        "CsManufacturer": info.get("system_manufacturer"),
+        "CsModel": info.get("system_model"),
+        "OsName": info.get("os_name"),
+        "OsVersion": os_version,
+        "OsBuildNumber": build_number,
+        "OsArchitecture": info.get("system_type"),
+        "CsSystemType": info.get("system_type"),
+        "BiosSMBIOSBIOSVersion": info.get("bios_version"),
+        "CsDomain": info.get("domain"),
+        "TotalPhysicalMemory": total_memory,
+    }]
+    meta_updates = {
+        "hostname": info.get("host_name"),
+    }
+    return rows, meta_updates
+
+
+def _parse_systeminfo_tool_text(text: str) -> tuple[list[dict], dict]:
+    lines = [line.rstrip() for line in text.splitlines()]
+    summary_started = False
+    summary: dict[str, str] = {}
+    summary_section = "시스템 요약"
+    section_pattern = re.compile(r"^\[(?P<section>.+?)\]$")
+
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line:
+            continue
+        section_match = section_pattern.match(line)
+        if section_match:
+            section_name = section_match.group("section").strip()
+            if section_name == summary_section:
+                summary_started = True
+                continue
+            if summary_started:
+                break
+        if not summary_started:
+            continue
+
+        parts = [part.strip() for part in raw_line.split("\t") if part.strip()]
+        if len(parts) < 2:
+            continue
+        label, value = parts[0], parts[1]
+        if label == "항목":
+            continue
+        summary[label] = value
+
+    if not summary:
+        return [], {}
+
+    rows = [{
+        "CsManufacturer": summary.get("시스템 제조업체"),
+        "CsModel": summary.get("시스템 모델"),
+        "OsName": summary.get("OS 이름"),
+        "OsVersion": summary.get("버전"),
+        "OsBuildNumber": _extract_build_number(summary.get("버전")),
+        "CsSystemType": summary.get("시스템 종류"),
+        "OsArchitecture": summary.get("시스템 종류"),
+        "BiosSMBIOSBIOSVersion": summary.get("BIOS 버전/날짜"),
+        "TotalPhysicalMemory": summary.get("설치된 실제 메모리(RAM)"),
+    }]
+    meta_updates = {
+        "hostname": summary.get("시스템 이름"),
+    }
+    return rows, meta_updates
+
+
+def _parse_ipconfig_text(text: str) -> tuple[list[dict], dict]:
+    rows: list[dict] = []
+    meta_updates: dict[str, str] = {}
+    current: dict | None = None
+    current_label: str | None = None
+
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if not stripped:
+            current_label = None
+            continue
+
+        if stripped.endswith(":") and ("adapter" in stripped.lower() or "어댑터" in stripped):
+            if current:
+                rows.append(_finalize_ipconfig_row(current))
+            connection_name = stripped[:-1].split("adapter", 1)[-1].strip() if "adapter" in stripped.lower() else stripped[:-1].split("어댑터", 1)[-1].strip()
+            current = {
+                "InterfaceAlias": connection_name,
+                "InterfaceDescription": connection_name,
+                "DNSServerSearchOrder": [],
+            }
+            current_label = None
+            continue
+
+        if ":" in stripped:
+            key, value = stripped.split(":", 1)
+            label = _cleanup_ipconfig_label(key)
+            cleaned_value = value.strip()
+
+            if current is None and label == "host_name":
+                meta_updates["hostname"] = cleaned_value
+                current_label = None
+                continue
+
+            if current is None:
+                current_label = None
+                continue
+
+            current_label = label
+            if label == "dns_servers":
+                current.setdefault("DNSServerSearchOrder", [])
+                if cleaned_value:
+                    current["DNSServerSearchOrder"].append(cleaned_value)
+            elif label == "ipv4_address":
+                current["IPv4Address"] = cleaned_value.split("(")[0].strip()
+            elif label == "mac_address":
+                current["MacAddress"] = cleaned_value.replace("-", ":")
+            elif label == "description":
+                current["InterfaceDescription"] = cleaned_value
+            elif label == "dhcp_enabled":
+                current["DHCPEnabled"] = cleaned_value.lower() in {"yes", "true", "예", "사용"}
+            elif label == "subnet_mask":
+                current["SubnetMask"] = cleaned_value
+            elif label == "default_gateway":
+                current["DefaultGateway"] = cleaned_value
+            continue
+
+        if current is not None and current_label == "dns_servers":
+            current.setdefault("DNSServerSearchOrder", []).append(stripped)
+            continue
+        if current is not None and current_label == "default_gateway" and stripped:
+            current["DefaultGateway"] = stripped
+
+    if current:
+        rows.append(_finalize_ipconfig_row(current))
+
+    rows = [row for row in rows if any(row.get(key) for key in ["MacAddress", "IPv4Address", "InterfaceAlias", "InterfaceDescription"])]
+    return rows, meta_updates
+
+
+def _finalize_ipconfig_row(row: dict) -> dict:
+    dns_servers = [item for item in row.get("DNSServerSearchOrder", []) if item]
+    row["DNSServerSearchOrder"] = dns_servers
+    return row
+
+
+def _cleanup_systeminfo_label(label: str) -> str:
+    normalized = re.sub(r"\s+", " ", label.replace(".", " ").strip().lower())
+    mapping = {
+        "host name": "host_name",
+        "호스트 이름": "host_name",
+        "os name": "os_name",
+        "os 이름": "os_name",
+        "os version": "os_version",
+        "os 버전": "os_version",
+        "system manufacturer": "system_manufacturer",
+        "시스템 제조업체": "system_manufacturer",
+        "system model": "system_model",
+        "시스템 모델": "system_model",
+        "system type": "system_type",
+        "시스템 종류": "system_type",
+        "bios version": "bios_version",
+        "bios 버전": "bios_version",
+        "domain": "domain",
+        "도메인": "domain",
+        "total physical memory": "total_physical_memory",
+        "총 실제 메모리": "total_physical_memory",
+    }
+    return mapping.get(normalized, "")
+
+
+def _extract_build_number(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    match = re.search(r"빌드\s+(\d+)", str(value), flags=re.IGNORECASE)
+    if match:
+        return match.group(1)
+    match = re.search(r"build\s+(\d+)", str(value), flags=re.IGNORECASE)
+    if match:
+        return match.group(1)
+    return None
+
+
+def _cleanup_ipconfig_label(label: str) -> str:
+    normalized = re.sub(r"\.+", "", label).strip().lower()
+    mapping = {
+        "host name": "host_name",
+        "호스트 이름": "host_name",
+        "description": "description",
+        "설명": "description",
+        "physical address": "mac_address",
+        "물리적 주소": "mac_address",
+        "ipv4 address": "ipv4_address",
+        "ipv4 주소": "ipv4_address",
+        "subnet mask": "subnet_mask",
+        "서브넷 마스크": "subnet_mask",
+        "default gateway": "default_gateway",
+        "기본 게이트웨이": "default_gateway",
+        "dns servers": "dns_servers",
+        "dns 서버": "dns_servers",
+        "dhcp enabled": "dhcp_enabled",
+        "dhcp 사용": "dhcp_enabled",
+    }
+    return mapping.get(normalized, normalized)
+
+
+def _clean_text(value):
+    if value is None:
+        return None
+    cleaned = str(value).replace("\x00", "").strip()
+    return cleaned or None
+
+
+def _parse_memory_usage_to_kb(value) -> Optional[int]:
+    if value is None:
+        return None
+    digits = re.sub(r"[^\d]", "", str(value))
+    if not digits:
+        return None
+    try:
+        return int(digits)
+    except ValueError:
+        return None
+
+
+def _to_int(value) -> Optional[int]:
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    text = re.sub(r"[^\d-]", "", str(value))
+    if not text or text == "-":
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        return None
+
+
+LEGACY_TEXT_PARSERS = {
+    "process.txt": _parse_process_text,
+    "netstat.txt": _parse_netstat_text,
+    "connections.txt": _parse_netstat_text,
+    "systeminfo.txt": _parse_systeminfo_text,
+    "systeminfo_tool.txt": _parse_systeminfo_tool_text,
+    "ipconfig_all.txt": _parse_ipconfig_text,
+}
 
 
 def _sanitize_collect_value(value):
